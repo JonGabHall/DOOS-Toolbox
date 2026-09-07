@@ -40,3 +40,10 @@ Before opening an issue, check **Troubleshooting** and **Known issues** in the
   failures in optional steps warn and continue rather than aborting a run.
 - Comment *why*, not *what*. The existing comments record constraints that are not
   visible in the code; keep that habit and skip the rest.
+
+## Acknowledgment
+
+This repository contains code generated or assisted by GitHub Copilot. Contributions
+made with AI assistance are welcome on the same terms as any other — the requirements
+above apply regardless of how a change was written, and you are responsible for
+validating anything you submit against real data in ArcGIS Pro.
