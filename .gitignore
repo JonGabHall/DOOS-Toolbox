@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# ArcGIS Pro
+*.gdb/
+*.sde
+*.lock
+*.atbx
+*.aprx
+*.tbx
+!*.pyt
+*.rasterproxies/
+
+# Raster / imagery sidecars and world files produced by tool runs
+*.aux.xml
+!toolbox/*.pyt.xml
+*.tfw
+*.jgw
+*.pgw
+*.ovr
+*.rrd
+
+# Tool outputs
+output/
+*_DescriptionReport.txt
+*_DescriptionReport.json
+*_FrameTable.csv
+*_CameraTable.csv
+BiigleMetadata.csv
+SourceManifest.json
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Agent tooling (kept in the development sandbox, not published)
+.agents/
+.claude/
+skills-lock.json
