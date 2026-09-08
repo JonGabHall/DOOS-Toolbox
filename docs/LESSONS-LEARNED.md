@@ -143,6 +143,25 @@ Reading a genuine CSV directly is still worth the branch: `arcpy.ListFields()` r
 sanitised names — `Depth M` comes back as `Depth_M` — which then match nothing in the raw
 rows.
 
+**Diff a failing output against a file known to work before theorising.** Chasing a
+missing video footprint through the standard produced three plausible explanations and no
+progress. Lining the output up column-for-column against a project whose footprint did
+draw settled it in one pass: the two files agreed on all thirteen fields the working one
+carried, and differed only in two the failing one added. The absent columns were the
+answer.
+
+**Filling an optional field with the nearest number to hand can be worse than leaving it
+empty.** `Sensor Ellipsoid Height Extended` and `Sensor True Altitude` are different
+vertical references, separated by the geoid — roughly 43 m in the North Sea. Writing the
+same value into both looks harmless and reads as more complete metadata, but it asserts a
+contradiction, and resolving the ellipsoid figure to an orthometric height put the sensor
+tens of metres *below* the elevation surface. A view ray cast from underground never
+reaches the ground, so no footprint exists to draw. The same applies to `Sensor Far
+Distance`: the name maps to slant range, so a profile's assumed value pins the frame
+centre at a fixed distance along the ray rather than where the ray actually lands. Both
+fields are now opt-in and off by default. An empty optional field is a stated unknown; a
+wrong one is a false claim the software has no way to question.
+
 ## Architecture in this repository
 
 **Core modules load by explicit file path, not through `sys.path`.** Each `FCT_*_core.py`

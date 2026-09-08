@@ -214,7 +214,12 @@ sign of your Z column before wondering why a footprint is missing or misplaced.
   profile can fill it — height above the ellipsoid is not something a camera rig knows.
   Map a column to it, or tick *Telemetry Z is a height above the ellipsoid* when that is
   what your Z genuinely records. Left empty, the multiplexer reports a missing value on
-  every row.
+  every row, which is the harmless outcome: a missing-value report costs you nothing,
+  whereas a wrong height is read as fact. Supplying the same number as *Sensor True
+  Altitude* is the tempting mistake — the two references differ by the geoid separation,
+  tens of metres in most of the world, and resolving the ellipsoid figure can place the
+  sensor below the elevation surface, where no view ray reaches the ground and no
+  footprint is drawn.
 - **`Near Distance` and `Camera Height Above Seafloor` do not reach the multiplexer.**
   Convert Video Metadata carries a fixed set of fields and neither is among them. Both are
   still written to the intermediate table, which is where the imagery tools read them.

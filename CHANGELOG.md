@@ -16,7 +16,10 @@ Everything here concerns *Generate Deep Ocean Video Metadata* unless stated othe
   `Sensor Ellipsoid Height Extended`. It is off by default and should stay off unless
   that is genuinely what the log records: true altitude and ellipsoid height are
   different references, and there is no bathymetry here to convert between them. An
-  explicit field mapping to that field wins over it.
+  explicit field mapping to that field wins over it. Turning it on when the two are not
+  the same thing suppresses the video footprint, because the ellipsoid figure resolves to
+  an orthometric height below the elevation surface. Together with **Write Sensor Far
+  Distance**, these are the two settings to clear first when a footprint does not appear.
 
 ### Fixed
 
