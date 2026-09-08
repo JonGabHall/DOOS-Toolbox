@@ -1461,21 +1461,24 @@ class GenerateDeepOceanVideoMetadata(object):
             direction="Input",
             category="Key Sensor Information")
         field_mapping.columns = [
-            ["GPString", "Telemetry Column"],
+            ["Field", "Telemetry Column"],
             ["GPString", "Video Metadata Field"],
         ]
+        # A Field column resolves its own choices from the dependent table, which is
+        # the one way to get a picker inside a value table - filters[0].list cannot
+        # be repopulated at runtime.
+        field_mapping.parameterDependencies = [telemetry_table.name]
         field_mapping.filters[1].type = "ValueList"
         field_mapping.filters[1].list = list(video_metadata_core.MAPPABLE_METADATA_FIELDS)
         field_mapping.description = (
             "Sends any other telemetry column straight to a video metadata field - a recorded "
             "heading, pitch, roll or field of view, for instance, in place of the profile's "
-            "assumed value. Type the column name on the left exactly as it appears in the "
-            "table header, and pick its destination on the right. A mapped value overrides "
-            "whatever the profile or auto-detection would have supplied, but a blank cell "
-            "leaves the existing value alone. ObjectID, Precision Time Stamp, AcquisitionDate, "
-            "Sensor Longitude and Sensor Latitude are not listed because this tool computes "
-            "them. An unrecognised column name is reported as a warning and skipped, rather "
-            "than failing the run."
+            "assumed value. Pick the source column on the left and its destination on the "
+            "right. A mapped value overrides whatever the profile or auto-detection would "
+            "have supplied, but a blank cell leaves the existing value alone. ObjectID, "
+            "Precision Time Stamp, AcquisitionDate, Sensor Longitude and Sensor Latitude are "
+            "not listed because this tool computes them. An unrecognised column name is "
+            "reported as a warning and skipped, rather than failing the run."
         )
         params.append(field_mapping)
 
@@ -1654,7 +1657,7 @@ class GenerateDeepOceanVideoMetadata(object):
         self._prefill_profile_overrides(params_by_name)
 
     def _update_field_overrides(self, params_by_name):
-        """Populate the X/Y/Timestamp field pick lists from the loaded
+        """Populate the X/Y/Z/Timestamp field pick lists from the loaded
         table's fields. No-op unless the telemetry table itself changed."""
         x_param = params_by_name.get("x_field")
         y_param = params_by_name.get("y_field")
@@ -1670,6 +1673,11 @@ class GenerateDeepOceanVideoMetadata(object):
         x_param.filter.list = header_fields
         y_param.filter.list = header_fields
         time_param.filter.list = header_fields
+        z_param = params_by_name.get("z_field")
+        # Checked separately: a session cached before this parameter existed still
+        # gets working X/Y/Timestamp lists rather than none at all.
+        if z_param is not None:
+            z_param.filter.list = header_fields
 
     def _prefill_profile_overrides(self, params_by_name):
         """Pre-fill the 8 override fields with the selected profile's
