@@ -1,5 +1,62 @@
 # Changelog
 
+## Unreleased
+
+Everything here concerns *Generate Deep Ocean Video Metadata* unless stated otherwise.
+
+### Added
+
+- **Three new controls under Key Sensor Information.** A **Z / Depth / Altitude Field**
+  picker, populated from the loaded table's header like X, Y and Timestamp; a **Constant
+  Z Value** applied to any row the telemetry leaves blank; and **Additional Field
+  Mapping**, a value table that routes any other column to any of the 19 video metadata
+  fields the tool does not compute for itself. Z previously came from auto-detection
+  alone, with no way to name the column or to supply a value when the log had none.
+- **Telemetry Z is a height above the ellipsoid**, an opt-in that also writes Z to
+  `Sensor Ellipsoid Height Extended`. It is off by default and should stay off unless
+  that is genuinely what the log records: true altitude and ellipsoid height are
+  different references, and there is no bathymetry here to convert between them. An
+  explicit field mapping to that field wins over it.
+
+### Fixed
+
+- **Video footprints never appeared, because camera tilt was written in the wrong
+  convention.** The acquisition profiles measure pitch from nadir, where 0 is straight
+  down. ArcGIS reads `Sensor Relative Elevation Angle` as tilt from the horizontal plane,
+  positive up. The profile value went through unchanged, so the Diver profile claimed
+  +30° — thirty degrees above the horizon — and a view ray aimed at the sky has no ground
+  intersection to draw a footprint from. Nothing warned, because the number was valid.
+  The value written is now `pitch − 90`.
+- **Far distance never reached the multiplexer.** Convert Video Metadata carries it only
+  when the column is named `Sensor Far Distance` *and* the value has no decimal point:
+  `4` survives, `4.0` is silently blanked, `Far Distance` is dropped entirely. It is now
+  rounded to whole metres, so all six named profiles deliver a value.
+- **Two tools failed after their work was already done when no portal was active.**
+  `arcpy.GetPortalDescription()` raises `ValueError`, which the best-effort handler around
+  it did not catch, so an optional lookup of the signed-in user's name took down
+  *Extracted Frame Image Metadata Generation* and *Cross-Reference Video Player Frame
+  Exports*.
+- **A table picked from the map emptied every field pick-list** and reported the table as
+  missing. A CSV added to a map becomes a table view whose name still ends in `.csv`, and
+  the reader chose its strategy from that extension, so it tried to open a view name as a
+  file. Values now resolve through `Describe().catalogPath` first.
+- **A folder passed as the output geodatabase reached `CreateMosaicDataset` and came back
+  as ERROR 000837**, which names nothing. *Build Mosaic and Oriented Imagery Datasets*
+  now rejects it up front and says which parameter is wrong.
+- **A WKT2 coordinate system passed from Python was silently ignored** and replaced with
+  the default. Such a value arrives wrapped in a geoprocessing value object rather than as
+  a string, and the recovery path only ran for strings — so any projection other than the
+  fallback would have produced wrong coordinates with no error.
+- **Resampling a log with no Z column raised a `TypeError`** on `None` arithmetic.
+- The rename summary was logged twice by
+  *Extracted Frame Image Metadata Generation*.
+
+### Changed
+
+- The camera pitch override is now labelled **Camera Tilt from Nadir**, since the value is
+  converted before being written rather than passed through as the MISB field. The
+  parameter name is unchanged, so existing scripts keep working.
+
 ## 1.0.0 — first public release
 
 First release of the toolbox as a shareable package. Everything below describes how this

@@ -107,8 +107,11 @@ Turns a navigation log into the metadata CSV that Esri's *Video Multiplexer* exp
 log itself only has to supply X, Y and a timestamp. Everything a navigation log never
 records — pitch, roll, field of view, near and far distance, height above the seafloor —
 comes instead from a selectable **Video Acquisition Profile**, which you can open up and
-adjust rather than take on trust. It will also write a QA track feature class, so the
-positions can be put on a map and looked at before you commit to a multiplex.
+adjust rather than take on trust. Z is handled however your data allows: name the column,
+let it be detected, or give a constant for a log that never recorded one. Anything else in
+the table can be routed to any video metadata field through **Additional Field Mapping**.
+It will also write a QA track feature class, so the positions can be put on a map and
+looked at before you commit to a multiplex.
 
 ### Cross-Reference Video Player Frame Exports
 Grab frames one at a time from the ArcGIS Pro video player and you get images with no
@@ -182,6 +185,19 @@ coordinate system will not be changed to match this run's settings.
 **Several Frame Tables in one folder is normal** for some exports, and supported; each
 pair is processed in turn.
 
+**A complete metadata file is not enough to draw a video footprint.** The multiplexer
+works the frame corners out from the sensor's position, tilt and field of view against an
+elevation surface, so it needs its *Digital Elevation Model* parameter — a layer, or a
+single average value such as `-30 meters` for a dive. Esri's own note is that the elevation
+must be below the sensor's recorded altitude. Leave it empty and you get a sensor track on
+the map and no footprint, with nothing to say why.
+
+**Altitude is measured from mean sea level, so a submerged camera's is negative.** A
+navigation log that records height above the seafloor, or depth as a positive number, will
+put the camera above the waterline as far as the multiplexer is concerned. Nothing checks
+this — the value is valid, just describing somewhere else — so it is worth looking at the
+sign of your Z column before wondering why a footprint is missing or misplaced.
+
 ## Known issues
 
 - **Metadata embedded inside TIFF files is not confirmed to be visible in ArcGIS Pro's
@@ -194,6 +210,14 @@ pair is processed in turn.
 - **`Frame Camera` mosaic raster type is not usable with this data.** It requires an
   Omega/Phi/Kappa or Matrix exterior-orientation field that video frame exports do not
   contain. Use the default `Table / Raster Catalog` option.
+- **`Sensor Ellipsoid Height Extended` is empty unless you supply it.** No acquisition
+  profile can fill it — height above the ellipsoid is not something a camera rig knows.
+  Map a column to it, or tick *Telemetry Z is a height above the ellipsoid* when that is
+  what your Z genuinely records. Left empty, the multiplexer reports a missing value on
+  every row.
+- **`Near Distance` and `Camera Height Above Seafloor` do not reach the multiplexer.**
+  Convert Video Metadata carries a fixed set of fields and neither is among them. Both are
+  still written to the intermediate table, which is where the imagery tools read them.
 
 ## Troubleshooting
 

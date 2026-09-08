@@ -168,24 +168,31 @@ part of Convert Video Metadata's target set): `CameraID`, `CameraNCols`,
 
 ## 5. Known limitations / open items (not yet addressed)
 
-- **Z sign/reference-frame caveat**: "Altitude above seafloor" is written
-  into MISB's `Sensor True Altitude` field as-is, but these are **not the
-  same physical quantity** (True Altitude is height above mean sea
+- **Z sign/reference-frame caveat**: a log's "altitude above seafloor" is
+  written into MISB's `Sensor True Altitude` field as-is, but these are
+  **not the same physical quantity** (True Altitude is height above mean sea
   level/ellipsoid; there is no bathymetry/seafloor-depth reference in this
-  tool to convert between the two). A `WARNING` is logged every run when
-  this Z Value Type is selected; treat the field as an approximation.
+  tool to convert between the two). A submerged camera's true altitude is
+  negative, so a log recording positive heights above the seafloor places
+  the sensor above the waterline as far as the multiplexer is concerned —
+  which is one reason a video footprint can fail to appear. Treat the field
+  as an approximation, and check the sign of the source column.
+  `Sensor Ellipsoid Height Extended` has the same problem and is only
+  written when the operator explicitly says the Z is an ellipsoid height, or
+  maps a column to it.
 - **Sensor Relative Azimuth Angle** is hardcoded to `0.0` — no profile in
   this project's library models an off-axis camera gimbal mount.
-- Convert Video Metadata's exact underlying arcpy call signature
-  (`tool(in_csv, out_csv, out_mapping_csv)`, positional, guessed from
-  Esri's Parameters table order) is **not confirmed against a live
-  signature** — `run_convert_video_metadata()` logs
-  `inspect.signature(tool)` once before calling, for diagnosis if this is
-  wrong.
+- **Camera pitch is stored from nadir and converted on the way out.**
+  Profiles keep `camera_pitch` as degrees from straight down, because that is
+  how a rig is described; ArcGIS reads `Sensor Relative Elevation Angle` as
+  tilt from the horizontal plane with negative pointing down, so the written
+  value is `camera_pitch - 90`. The two conventions are easy to conflate and
+  nothing downstream complains when they are, so anything reading or writing
+  that field needs to be explicit about which one it means.
 - The `GPValueTable` parsing approach (`shlex.split()` on `getRow()`'s
   output) and `.filters[i]` per-column indexing are grounded in documented
   ArcGIS patterns but **not yet confirmed against a live ArcGIS Pro
-  session** — no local arcpy available in this dev environment.
+  session**.
 
 ## 6. Best-practices review (against Esri's official guidance)
 
