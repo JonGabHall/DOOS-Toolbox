@@ -605,6 +605,7 @@ def build_video_metadata_table(
     resample_interval_seconds=None,
     z_constant=None,
     z_is_ellipsoid_height=False,
+    write_far_distance=False,
     extra_field_mappings=None,
     camera_id=1,
     camera_ncols=None,
@@ -743,6 +744,9 @@ def build_video_metadata_table(
     # a decimal point, so it is rounded to whole metres here rather than lost there.
     far_distance = profile.get("far_distance")
     far_distance = None if far_distance is None else int(round(float(far_distance)))
+    fields = list(VIDEO_METADATA_TABLE_FIELDS)
+    if not write_far_distance:
+        fields.remove("Sensor Far Distance")
     for i, record in enumerate(records):
         if progress_increment and i % progress_increment == 0:
             log(f"Building video metadata rows: {i}/{total_records}...")
@@ -774,6 +778,8 @@ def build_video_metadata_table(
             "Sensor Far Distance": far_distance,
             "Camera Height Above Seafloor": profile.get("camera_height"),
         }
+        if not write_far_distance:
+            del row["Sensor Far Distance"]
         # A blank cell must not wipe out a profile-supplied value.
         row.update({
             target: value
@@ -782,7 +788,7 @@ def build_video_metadata_table(
         })
         metadata_rows.append(row)
 
-    intermediate_table_path = write_video_metadata_table(metadata_rows, output_folder, output_name, log=log)
+    intermediate_table_path = write_video_metadata_table(metadata_rows, output_folder, output_name, fields=fields, log=log)
     final_table_path, mapping_file_path = run_convert_video_metadata(
         intermediate_table_path, output_folder, output_name, log=log
     )
@@ -798,7 +804,7 @@ def build_video_metadata_table(
     }
 
 
-def write_video_metadata_table(rows, output_folder, output_name, log=print):
+def write_video_metadata_table(rows, output_folder, output_name, fields=None, log=print):
     """Write rows to <output_name>_VideoMetadataTable.csv. Always a CSV,
     never a geodatabase table - Convert Video Metadata and Video Multiplexer
     both only accept CSV/JSON/GPX."""
@@ -806,7 +812,7 @@ def write_video_metadata_table(rows, output_folder, output_name, log=print):
     output_folder.mkdir(parents=True, exist_ok=True)
     table_path = output_folder / f"{output_name}_VideoMetadataTable.csv"
     with open(table_path, "w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=VIDEO_METADATA_TABLE_FIELDS)
+        writer = csv.DictWriter(handle, fieldnames=fields or VIDEO_METADATA_TABLE_FIELDS)
         writer.writeheader()
         writer.writerows(rows)
     log(f"Wrote {len(rows)} row(s) to {table_path}")

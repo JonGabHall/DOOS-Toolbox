@@ -1472,6 +1472,25 @@ class GenerateDeepOceanVideoMetadata(object):
         )
         params.append(z_is_ellipsoid_height)
 
+        write_far_distance = arcpy.Parameter(
+            displayName="Write Sensor Far Distance to the multiplexer file",
+            name="write_far_distance",
+            datatype="GPBoolean",
+            parameterType="Optional",
+            direction="Input",
+            category="Key Sensor Information")
+        write_far_distance.value = False
+        write_far_distance.description = (
+            "Off by default, because the field is not needed to draw a video footprint and a "
+            "short value can stop one appearing: it caps how far the view reaches, so a "
+            "profile's few metres cannot arrive at a seafloor tens of metres away, and the "
+            "footprint is clipped to nothing. Turn it on only when the profile's far distance "
+            "is genuinely larger than the range from the camera to the ground. The value is "
+            "always written to the intermediate table either way, where the imagery tools "
+            "read it."
+        )
+        params.append(write_far_distance)
+
         field_mapping = arcpy.Parameter(
             displayName="Additional Field Mapping",
             name="additional_field_mapping",
@@ -1869,6 +1888,7 @@ class GenerateDeepOceanVideoMetadata(object):
                 resample_interval_seconds=params_by_name["resample_interval"].value,
                 z_constant=params_by_name["z_constant"].value,
                 z_is_ellipsoid_height=bool(params_by_name["z_is_ellipsoid_height"].value),
+                write_far_distance=bool(params_by_name["write_far_distance"].value),
                 extra_field_mappings=params_by_name["additional_field_mapping"].value,
                 camera_id=params_by_name["camera_id"].value,
                 camera_ncols=params_by_name["camera_ncols"].value,
