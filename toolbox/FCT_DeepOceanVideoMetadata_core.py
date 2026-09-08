@@ -657,6 +657,7 @@ def build_video_metadata_table(
     input_srs=None,
     resample_interval_seconds=None,
     z_constant=None,
+    z_is_ellipsoid_height=False,
     extra_field_mappings=None,
     camera_id=1,
     camera_ncols=None,
@@ -700,6 +701,9 @@ def build_video_metadata_table(
     if mappings:
         log("Additional field mappings: "
             + ", ".join(f"{source} -> {target}" for source, target in mappings))
+    if z_is_ellipsoid_height:
+        log("Treating the telemetry Z as a height above the ellipsoid: it is written to "
+            "Sensor Ellipsoid Height Extended as well as Sensor True Altitude.")
 
     # --- Normalize rows, skipping any missing the required X/Y/Timestamp ---
     records = []
@@ -791,7 +795,7 @@ def build_video_metadata_table(
             "Sensor Longitude": lon,
             "Sensor Latitude": lat,
             "Sensor True Altitude": record["z"],
-            "Sensor Ellipsoid Height Extended": None,
+            "Sensor Ellipsoid Height Extended": record["z"] if z_is_ellipsoid_height else None,
             "CameraID": camera_id,
             "CameraNCols": camera_ncols,
             "CameraNRows": camera_nrows,

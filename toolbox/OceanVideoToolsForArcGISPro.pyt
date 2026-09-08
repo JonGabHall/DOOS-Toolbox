@@ -1453,6 +1453,25 @@ class GenerateDeepOceanVideoMetadata(object):
         )
         params.append(z_constant)
 
+        z_is_ellipsoid_height = arcpy.Parameter(
+            displayName="Telemetry Z is a height above the ellipsoid",
+            name="z_is_ellipsoid_height",
+            datatype="GPBoolean",
+            parameterType="Optional",
+            direction="Input",
+            category="Key Sensor Information")
+        z_is_ellipsoid_height.value = False
+        z_is_ellipsoid_height.description = (
+            "Writes Z into Sensor Ellipsoid Height Extended as well as Sensor True Altitude. "
+            "Leave this off unless you know that is what your log records: the two are "
+            "different references, and this tool has no bathymetry with which to convert "
+            "between them, so ticking it for a depth below the surface or an altitude above "
+            "the seafloor states something untrue rather than merely imprecise. Off, the "
+            "field stays empty and the multiplexer reports it as a missing value. An explicit "
+            "Additional Field Mapping to that field takes precedence over this."
+        )
+        params.append(z_is_ellipsoid_height)
+
         field_mapping = arcpy.Parameter(
             displayName="Additional Field Mapping",
             name="additional_field_mapping",
@@ -1849,6 +1868,7 @@ class GenerateDeepOceanVideoMetadata(object):
                 input_srs=params_by_name["input_srs"].value,
                 resample_interval_seconds=params_by_name["resample_interval"].value,
                 z_constant=params_by_name["z_constant"].value,
+                z_is_ellipsoid_height=bool(params_by_name["z_is_ellipsoid_height"].value),
                 extra_field_mappings=params_by_name["additional_field_mapping"].value,
                 camera_id=params_by_name["camera_id"].value,
                 camera_ncols=params_by_name["camera_ncols"].value,
