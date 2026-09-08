@@ -1,28 +1,23 @@
 # -*- coding: utf-8 -*-
 """
-FCT_ImageFusion_tool_v2.pyt
+Python toolbox for ArcGIS Pro 3.7+.
 
-REFACTORED VERSION - Production-ready Python toolbox for ArcGIS Pro 3.7+
+Turns deep ocean video into documented still imagery. Reads the Frame and
+Camera tables produced upstream, writes their values into the frame images,
+and generates the metadata files the downstream annotation and imagery
+platforms expect - GDAL PAM (.aux.xml), XMP, EXIF/PNG tEXt, iFDO v2.2.1 JSON
+and BIIGLE volume CSV.
 
-Embeds Frame/Camera Table (FCT) metadata from Extract Video Frames To Images
-into image files and generates standardized metadata sidecars (GDAL PAM,
-EXIF/PNG tEXt, iFDO v2.2.1 JSON).
+The tool classes here stay thin. Anything substantive lives in the matching
+FCT_*_core.py modules, so it can be read and tested without opening a dialog.
+Those modules must sit in the same folder as this file; they ship together.
 
-HIGH PRIORITY FIXES:
-  1. Safe import (no sys.path manipulation) - portable across machines
-  2. Parameter name mapping (not hardcoded indices) - safe to reorder params
-  3. Comprehensive input validation (updateMessages) - fail-fast with clarity
-  4. Specific exception handling - contextual error messages for users
-  5. Meaningful output parameter - tells users what was produced
-
-This version is production-ready for distribution to multiple machines.
-
-Requirements:
-    ArcGIS Pro 3.7+. FCT_ImageFusion_core.py must be in the same folder as
-    this .pyt file - both ship as a package.
-
-Author:      Refactored for Production
-Created:     2026-08-26
+Two conventions to keep if you edit this, both of which cost time to learn.
+Parameters are looked up by name rather than by index, because ArcGIS caches
+a tool's parameter list and index access breaks silently the moment one is
+inserted or reordered. And input is checked in updateMessages() rather than
+in execute(), so a problem appears in the dialog instead of after the user
+has waited for a run to start.
 """
 
 import json
@@ -729,10 +724,7 @@ class ExtractedFrameImageMetadataGeneration(object):
                 param.enabled = enabled
 
     def updateParameters(self, parameters):
-        """Enable/disable dependent parameters based on checkbox state.
-
-        Uses parameter name mapping (not hardcoded indices) for robustness.
-        """
+        """Enable/disable dependent parameters based on checkbox state."""
         # Build parameter lookup by name for safe access
         params_by_name = {p.name: p for p in parameters}
 
@@ -929,7 +921,7 @@ class ExtractedFrameImageMetadataGeneration(object):
             try:
                 rename_result = fct_core.rename_frame_images(export_folder, rename_images_base_name, log=_gp_log)
                 arcpy.AddMessage(
-                    f"✓ Renamed {rename_result['renamed']} image(s) to base name "
+                    f"Renamed {rename_result['renamed']} image(s) to base name "
                     f"'{rename_images_base_name}' ({rename_result['skipped']} skipped, "
                     f"{rename_result['errors']} error(s))"
                 )
@@ -959,7 +951,7 @@ class ExtractedFrameImageMetadataGeneration(object):
                     coverage = fct_core.preview_template_coverage(ifdo_template_input)
                     coverage_text = fct_core.format_template_preview(coverage)
                     arcpy.AddMessage(
-                        f"✓ Imported iFDO template: {len(template_data)} value(s) loaded"
+                        f"Imported iFDO template: {len(template_data)} value(s) loaded"
                     )
                     arcpy.AddMessage(coverage_text)
                 else:
@@ -1012,7 +1004,7 @@ class ExtractedFrameImageMetadataGeneration(object):
         # Show which fields were overridden by user input
         if manual_overrides:
             arcpy.AddMessage(
-                f"✓ User input overrides: {len(manual_overrides)} value(s) updated"
+                f"User input overrides: {len(manual_overrides)} value(s) updated"
             )
             for key in sorted(manual_overrides.keys()):
                 arcpy.AddMessage(f"  - {key}: {manual_overrides[key]}")
@@ -1102,7 +1094,7 @@ class ExtractedFrameImageMetadataGeneration(object):
             # filled in any manual iFDO fields or imported a template.
             if export_output_folder and (write_aux or write_xmp or write_ifdo or should_export_biigle_metadata):
                 arcpy.AddMessage(
-                    f"✓ Generating metadata sidecars in output folder "
+                    f"Generating metadata sidecars in output folder "
                     f"(aux={write_aux}, xmp={write_xmp}, ifdo={write_ifdo}, "
                     f"biigle={should_export_biigle_metadata}) with {len(ifdo_metadata)} metadata value(s)"
                 )
@@ -1133,7 +1125,7 @@ class ExtractedFrameImageMetadataGeneration(object):
                 pass2_result = None
                 if export_output_folder:
                     arcpy.AddWarning(
-                        "⚠ Output folder specified but no sidecars were generated because no sidecar "
+                        "Output folder specified but no sidecars were generated because no sidecar "
                         "format is selected, 'Write iFDO JSON sidecars' is unchecked, and BIIGLE export "
                         "is unchecked."
                     )
@@ -1155,7 +1147,7 @@ class ExtractedFrameImageMetadataGeneration(object):
                 else:
                     ifdo_summary = f"  • {per_image_ifdo_count} per-image iFDO JSON file(s)"
                 arcpy.AddMessage(
-                    f"✓ Metadata written to output folder:\n"
+                    f"Metadata written to output folder:\n"
                     f"{ifdo_summary}\n"
                     f"  • {aux_count} .aux.xml file(s)\n"
                     f"  • {xmp_count} .xmp file(s)"

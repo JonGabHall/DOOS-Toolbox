@@ -947,7 +947,9 @@ def get_arcgis_pro_context(aprx_path=None):
                 person["uri"] = f"mailto:{user['email']}"
             context["image-pi"] = person
             context["image-creators"] = [person]
-    except (RuntimeError, KeyError, TypeError):
+    # ValueError: arcpy raises it (message 30101, "None is invalid") when there is no
+    # active portal URL - signed out, or licensed Single Use rather than through a portal.
+    except (RuntimeError, KeyError, TypeError, ValueError):
         pass
 
     return context

@@ -8,14 +8,12 @@ facts (time extent, frame rate/resolution, internal discontinuities/gaps)
 and validates whether the two actually line up (temporal overlap, coverage
 percentage), writing a plain-text + JSON report.
 
-Exists specifically because FCT_RuleBasedFrameExtraction_core.py's own
-Extraction Rules dialog CANNOT reliably surface computed values back to the
-user (CONFIRMED live: a GPValueTable column's pick-list cannot be updated
-at runtime in this ArcGIS Pro environment - see repo notes) - this tool
-sidesteps that by producing a report FIRST, which the user reads and
-manually transcribes the relevant values from (detected video start/end,
-suggested Sensor Mappings rows) into that other tool's dialog, rather than
-trying to inject them into the same dialog live.
+Exists because a value table column's pick-list is fixed at construction and
+cannot be repopulated at runtime, so no dialog can offer these values back as
+choices once it has worked them out. The report sidesteps that: it is produced
+first, and the operator reads the detected video start and end and the
+suggested sensor mappings out of it and enters them where they are needed,
+rather than a dialog trying to fill itself in.
 
 Only depends on `av` (PyAV), and only for reading a video - the table-only
 path needs nothing beyond a default ArcGIS Pro install. is_av_available()

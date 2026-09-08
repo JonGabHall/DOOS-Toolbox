@@ -460,9 +460,12 @@ def _ensure_spatial_reference(spatial_reference, log=print):
         return default_sr
 
     wkt_text = None
-    if isinstance(spatial_reference, str):
-        wkt_text = spatial_reference.strip()
-        if not wkt_text:
+    if not isinstance(spatial_reference, arcpy.SpatialReference):
+        # A GPCoordinateSystem's .value is a str when the tool is called from Python, and
+        # an opaque geoprocessing value object when arcpy took the WKT but did not resolve
+        # it. Both carry the WKT in str(); only a real SpatialReference is usable as-is.
+        wkt_text = str(spatial_reference).strip()
+        if not wkt_text or wkt_text.lower() == "none":
             log("WARNING: Output Coordinate System was blank or 'Unknown' - defaulting to "
                 "WGS 1984 Web Mercator Auxiliary Sphere (EPSG:3857).")
             return default_sr
@@ -559,6 +562,18 @@ def ensure_geodatabase(gdb_path, log=print):
     geodatabase if gdb_path doesn't exist yet and ends in .gdb."""
     gdb_path = str(gdb_path)
     if arcpy.Exists(gdb_path):
+        # arcpy.Exists() is true for a plain folder as well, and CreateMosaicDataset
+        # then rejects it with ERROR 000837 without naming the parameter at fault.
+        try:
+            workspace_type = arcpy.Describe(gdb_path).workspaceType
+        except (OSError, AttributeError, RuntimeError):
+            workspace_type = None
+        if workspace_type == "FileSystem":
+            raise ValueError(
+                f"Output geodatabase is a folder, not a geodatabase: {gdb_path}. Mosaic "
+                "and oriented imagery datasets can only be created inside a geodatabase - "
+                f"give this parameter a path ending in .gdb, such as {Path(gdb_path) / 'OceanVideo.gdb'}."
+            )
         return gdb_path
     if not gdb_path.lower().endswith(".gdb"):
         raise ValueError(
