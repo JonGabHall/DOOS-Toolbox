@@ -1212,7 +1212,7 @@ class ExtractedFrameImageMetadataGeneration(object):
 # Azimuth/Elevation/Roll Angle (camera-to-platform angle); always
 # profile-driven, never telemetry-sourced.
 _PROFILE_OVERRIDE_SPECS = [
-    ("camera_pitch_override", "Sensor Relative Elevation Angle (degrees, 0 = straight down)", "camera_pitch"),
+    ("camera_pitch_override", "Camera Tilt from Nadir (degrees, 0 = straight down, 90 = horizon)", "camera_pitch"),
     ("camera_roll_override", "Sensor Relative Roll Angle (degrees)", "camera_roll"),
     ("heading_constant_override", "Constant Platform Heading (degrees, used if no track/field)", "heading_constant"),
     ("hfov_override", "Sensor Horizontal Field of View (degrees)", "hfov"),

@@ -644,6 +644,16 @@ def build_video_metadata_table(
     profile = build_profile(profile_name, manual_overrides)
     log(f"Resolved telemetry fields: {resolved}")
     log(f"Using Video Acquisition Profile '{profile_name}': {profile.get('description', '')}")
+    # The profiles measure camera pitch from nadir (0 = straight down). ArcGIS reads
+    # Sensor Relative Elevation Angle as tilt from the horizontal plane, where negative
+    # points down - so passing the profile value straight through aims the camera above
+    # the horizon and no ground intersection, and therefore no footprint, can be found.
+    camera_pitch = profile.get("camera_pitch")
+    sensor_relative_elevation = None if camera_pitch is None else float(camera_pitch) - 90.0
+    if sensor_relative_elevation is not None:
+        log(f"Camera pitch {camera_pitch} degrees from nadir is written as Sensor Relative "
+            f"Elevation Angle {sensor_relative_elevation} degrees, the tilt from horizontal "
+            "ArcGIS expects, where negative points downward.")
     mappings = normalize_field_mappings(extra_field_mappings, field_names, log=log)
     if mappings:
         log("Additional field mappings: "
@@ -756,7 +766,7 @@ def build_video_metadata_table(
             "Platform Pitch Angle (Full)": record["pitch"],
             "Platform Roll Angle (Full)": record["roll"],
             "Sensor Relative Azimuth Angle": 0.0,
-            "Sensor Relative Elevation Angle": profile.get("camera_pitch"),
+            "Sensor Relative Elevation Angle": sensor_relative_elevation,
             "Sensor Relative Roll Angle": profile.get("camera_roll"),
             "Sensor Horizontal Field of View": profile.get("hfov"),
             "Sensor Vertical Field of View": profile.get("vfov"),
