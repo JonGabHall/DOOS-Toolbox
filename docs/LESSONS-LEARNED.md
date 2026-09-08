@@ -28,6 +28,16 @@ value-table) `GPString` parameter's `.filter.list` *is* dynamically updatable �
 limitation is specific to value tables. If a value table column's choices can only be
 known at runtime, leave it as free text and communicate the values another way.
 
+**A `Field` column in a value table turns its dependent parameter into a table view.**
+There is a way to get a real picker inside a value table — declare the column as `Field`
+and point `parameterDependencies` at the table parameter, which ArcGIS then resolves
+itself, sidestepping the limitation above. The cost is severe and not obvious: ArcGIS
+registers the dependent input as a table view, so its `valueAsText` returns a view name
+rather than a path, and everything that read that input as a file stops working. One
+optional parameter took out the tool's primary input and every other pick-list on the
+dialog. The parameter objects looked perfectly correct when inspected; only a real dialog
+showed the damage.
+
 **`updateParameters()` and `updateMessages()` must never raise, and cannot log.**
 `arcpy.AddMessage()` writes to the run-time messages pane, which does not exist while the
 dialog is open — anything logged there is silently discarded. To surface a problem found
@@ -88,6 +98,20 @@ of the parameter. Verify such strings against a working example or the exact dia
 plain-English reading of a geoprocessing keyword can be the opposite of what it does for
 your case.
 
+**Convert Video Metadata field-matches only the fields Esri documents.** Its reference
+page lists thirteen; anything else is dropped, under any spelling. Far distance is not
+among them, and neither is it in the multiplexer's own
+`FMV_Multiplexer_Field_Mapping_Template.csv` (`C:\Program Files\ArcGIS\Pro\Resources\MotionImagery`),
+which is the authoritative list of 76 accepted headings — the only distance tags there are
+21 `Slant Range` and 57 `Ground Range`. So a per-frame far distance cannot be carried to
+the multiplexer as such, whatever the column is called.
+
+**Do not inject values into the converted file to fill a gap.** Writing a value into a
+column the multiplexer does not recognise turns a harmless `WARNING 003950: Empty metadata
+value` into `WARNING 002651: Unable to parse the input metadata file`. An empty column it
+ignores; a populated column it cannot map, it complains about. Check a heading against the
+template before deciding a blank is a bug.
+
 ## Data
 
 **A world file's existence does not mean an image is georeferenced.** Frames from video
@@ -106,6 +130,16 @@ common value — a level camera — not a missing one.
 between vessels, so fields are resolved once per table against an ordered list of
 candidate names, case-insensitively, rather than being hard-coded. Add new spellings to
 the candidate lists rather than renaming anyone's data.
+
+**Decide how to read a table by what it is, not by what it is called.** A CSV added to a
+map becomes a table view whose name still ends in `.csv`. An extension test therefore
+routes it to the file-reading branch, and `open()` fails on something that was never a
+path — which surfaces as empty field pick-lists and a "table does not exist" message
+rather than as anything to do with reading. Resolve the value through
+`arcpy.Describe().catalogPath` first, then check whether the result really is a file.
+Reading a genuine CSV directly is still worth the branch: `arcpy.ListFields()` returns
+sanitised names — `Depth M` comes back as `Depth_M` — which then match nothing in the raw
+rows.
 
 ## Architecture in this repository
 
