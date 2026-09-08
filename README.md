@@ -3,16 +3,20 @@
 An ArcGIS Pro Python toolbox for turning deep ocean video into documented, analysis-ready
 still imagery.
 
-Underwater video from remotely operated vehicles, autonomous vehicles, towed sleds and
-drop cameras is usually accompanied by a separate navigation log, and the two are only
-loosely connected. These tools close that gap: they check that a video and its telemetry
-actually line up, produce the metadata needed to embed telemetry into the video itself,
-rebuild the tables that frame exports need, write standards-compliant metadata onto every
-extracted frame, and load the result into mosaic and oriented imagery datasets.
+Video from an ROV, an AUV, a towed sled or a drop camera almost never arrives
+self-describing. The vehicle records one thing, the navigation log records another, and
+the two meet only through a timestamp; often not even reliably through that. Closing the
+gap by hand is slow, and it is where the errors get in.
 
-The emphasis is on the last two steps — **getting frames out of the video, and giving
-those frames complete metadata** — because that is where the standards-compliance work
-lives and where most of the manual effort otherwise falls.
+So these five tools do it instead. They tell you whether a video and its telemetry line up
+at all, before you have spent an afternoon assuming they do. They build the metadata that
+lets telemetry be written into the video itself. They reconstruct the tables that frame
+exports need but never carry. And they put standards-compliant metadata onto every frame
+that comes out the far end, ready for a mosaic or an oriented imagery dataset.
+
+Most of the work sits in the last two stages: getting frames out of the video, and giving
+those frames complete metadata. That is where the standards live (iFDO, BIIGLE, MISB), and
+it is the part that otherwise has to be done by hand, dive after dive.
 
 ## Workflow
 
@@ -33,9 +37,10 @@ flowchart LR
     class S4,S5,S6 i
 ```
 
-Stages 1–3 work with video; stages 4–5 work with still images. See
-**[docs/workflow.md](docs/workflow.md)** for the detailed diagram, the artifacts that flow
-between tools, minimum inputs per tool, and where you can join the workflow part-way.
+Stages 1–3 are video work; stages 4–5 are image work. The detailed diagram lives in
+**[docs/workflow.md](docs/workflow.md)**, along with the artifacts that pass between
+tools, the minimum each one needs to run, and the points where you can join the sequence
+part-way — which is what usually happens, since few people start at stage 1.
 
 ## Repository structure
 
@@ -90,40 +95,42 @@ installation with no extra packages.
 ## The tools
 
 ### Inspect Video and Sensor Data
-Probes a video and/or a sensor table and writes a plain-text and JSON report: time extent,
-frame rate, resolution, dropped-frame discontinuities, sampling gaps, per-column value
-statistics, and whether the video and the table overlap in time at all. Reads a video's
-own embedded MISB KLV telemetry when present, and can export it as a CSV — recovering the
-telemetry from a multiplexed video when the original log is gone. Run it before anything
-else; it is read-only.
+Read-only, and the sensible place to start. It probes a video, a sensor table, or both,
+then writes what it finds as plain text and JSON: time extent, frame rate, resolution,
+dropped-frame discontinuities, sampling gaps, per-column statistics, and the question that
+matters most — whether the two overlap in time at all. Where a video carries embedded MISB
+KLV telemetry it reads that as well, and can write it back out as CSV; that is how you
+recover telemetry from a multiplexed video once the original log has gone missing.
 
 ### Generate Deep Ocean Video Metadata
-Builds a metadata CSV ready for Esri's *Video Multiplexer* from a navigation log. Only X,
-Y and a timestamp are needed from the log — the camera geometry a navigation log never
-records (pitch, roll, field of view, near/far distance, height above seafloor) comes from
-a selectable **Video Acquisition Profile** you can inspect and adjust. Optionally writes a
-QA track feature class so you can confirm positions on a map before multiplexing.
+Turns a navigation log into the metadata CSV that Esri's *Video Multiplexer* expects. The
+log itself only has to supply X, Y and a timestamp. Everything a navigation log never
+records — pitch, roll, field of view, near and far distance, height above the seafloor —
+comes instead from a selectable **Video Acquisition Profile**, which you can open up and
+adjust rather than take on trust. It will also write a QA track feature class, so the
+positions can be put on a map and looked at before you commit to a multiplex.
 
 ### Cross-Reference Video Player Frame Exports
-Rebuilds a Frame Table and Camera Table for frames grabbed one at a time from the ArcGIS
-Pro video player. Those frames carry no table — only a filename ending in the frame's
-elapsed video time. This converts that to an absolute timestamp and matches each frame to
-the nearest row of a video metadata table, so manually grabbed frames rejoin the same
-workflow as automatically extracted ones. Frames with no match are kept and flagged, never
-silently dropped.
+Grab frames one at a time from the ArcGIS Pro video player and you get images with no
+table at all; the only clue to when each was taken is the elapsed video time on the end of
+its filename. This converts that to an absolute timestamp, matches each frame against the
+nearest row of a video metadata table, and rebuilds the Frame and Camera Tables the rest
+of the workflow depends on. Whatever cannot be matched is kept and flagged. Nothing is
+dropped quietly.
 
 ### Extracted Frame Image Metadata Generation
-Writes per-frame metadata into the frame images and into sidecar files beside them.
-Outputs, each optional: GDAL PAM (`.aux.xml`), Adobe XMP (`.xmp`), metadata embedded
-inside the image (EXIF / PNG tEXt), **iFDO** JSON, a **BIIGLE** upload CSV, and a JSON
-manifest recording where every image came from. Can assemble everything into a
-self-contained deliverable folder, and save the metadata you type as a reusable template.
+The centre of gravity. Metadata goes into the frame images themselves and into sidecars
+beside them; every output is optional, so you can take only what your downstream platform
+asks for. GDAL PAM (`.aux.xml`), Adobe XMP (`.xmp`), embedded EXIF or PNG tEXt, **iFDO**
+JSON, a **BIIGLE** upload CSV, and a JSON manifest recording exactly where each image came
+from. It will assemble the lot into a self-contained deliverable folder, and save whatever
+you typed as a template for next time.
 
 ### Build Mosaic and Oriented Imagery Datasets
-Loads the frames and their tables into a mosaic dataset (continuous imagery on a map)
-and/or an oriented imagery dataset (each frame inspectable in its real viewing geometry).
-Ground footprints are computed from the camera model, so the frames do not need to be
-individually georeferenced.
+Loads the frames and their tables into a mosaic dataset (continuous imagery on a map), an
+oriented imagery dataset (each frame inspectable in its true viewing geometry), or both.
+Ground footprints are computed from the camera model, so no frame needs georeferencing of
+its own.
 
 ## Outputs
 
@@ -140,39 +147,40 @@ individually georeferenced.
 
 ## Notes and operational guidance
 
-**Coordinate systems must agree between tools.** *Cross-Reference Video Player Frame
-Exports* writes frame positions in the output coordinate system you choose, and *Build
-Mosaic and Oriented Imagery Datasets* assumes those positions are already in *its* output
-coordinate system. If the two differ, every footprint lands in the wrong place. Both
-default to WGS 1984 Web Mercator.
+**Coordinate systems have to agree between the tools.** *Cross-Reference Video Player
+Frame Exports* writes frame positions in whichever output coordinate system you give it;
+*Build Mosaic and Oriented Imagery Datasets* then assumes those positions are already in
+*its* output coordinate system. Let the two disagree and every footprint lands somewhere
+it should not. Both default to WGS 1984 Web Mercator, so leaving both alone is safe.
 
-**Set the telemetry coordinate system correctly.** *Generate Deep Ocean Video Metadata*
-asks for the system your log's X/Y are **already in**, not one to convert to. The most
-common single mistake is leaving it at WGS84 when the log holds projected eastings and
-northings. Tick *Create Sensor Track Point Feature Class* and look at the track on a map —
-it takes seconds and catches this immediately.
+**The telemetry coordinate system is the one your log is already in**, not one to convert
+to. *Generate Deep Ocean Video Metadata* is asking what your X and Y currently mean; leave
+it at WGS84 when the log actually holds projected eastings and northings and nothing will
+error, it will simply be wrong. This catches more people than anything else here. Tick
+*Create Sensor Track Point Feature Class*, put the track on a map, and look at it: five
+seconds, and a wrong answer is unmistakable.
 
-**Frames from video extraction are not really georeferenced.** They usually carry a
-placeholder world file describing pixel space rather than ground coordinates. This is
-expected. The tools compute each frame's real ground footprint from the camera model
-instead, so no per-image georeferencing is required.
+**Frames out of video extraction are not really georeferenced.** They generally arrive
+with a placeholder world file describing pixel space rather than ground coordinates, and
+that is fine — the tools derive each frame's true ground footprint from the camera model
+instead. No per-image georeferencing is needed.
 
-**Timestamps are treated as UTC.** A time with no timezone is assumed to be UTC
-throughout. Mixing local and UTC times between a video and its log is a common cause of
-zero overlap being reported.
+**Everything is UTC.** A time carrying no timezone is read as UTC wherever it appears.
+Mixing local and UTC between a video and its log is the usual reason a report comes back
+insisting the two never overlap.
 
-**Choose the Imagery Category to match how the camera pointed.** It supplies the defaults
-used wherever your data does not provide a real value. Leaving it at *Nadir* for a
-forward-looking camera places footprints as though the camera pointed at the seafloor
-beneath the vehicle.
+**Match the Imagery Category to how the camera actually pointed.** It supplies the
+defaults used wherever your own data has nothing to say. Leave it at *Nadir* for a
+forward-looking camera and footprints will be drawn as though the camera had stared at the
+seafloor beneath the vehicle.
 
 **Re-running is safe.** Adding images to an existing mosaic or oriented imagery dataset
-adds only what is new. *Cross-Reference Video Player Frame Exports* processes only frames
-it has not seen before. Note that an existing dataset is reused as-is — its coordinate
-system is not changed to match new settings.
+adds only what is new, and *Cross-Reference Video Player Frame Exports* skips frames it
+has already seen. One caveat: an existing dataset is reused as it stands, so its
+coordinate system will not be changed to match this run's settings.
 
-**More than one Frame Table in a folder is supported**, and is normal for some exports.
-Each pair is processed in turn.
+**Several Frame Tables in one folder is normal** for some exports, and supported; each
+pair is processed in turn.
 
 ## Known issues
 
@@ -222,7 +230,7 @@ caches parameters for the session.
 
 ## Issues
 
-Find a bug or want to request a new feature? Please let us know by submitting an issue.
+Found a bug, or want something the toolbox does not do yet? Open an issue.
 
 ## Contributing
 
@@ -236,7 +244,7 @@ This repository contains code generated or assisted by GitHub Copilot.
 
 ## Disclaimer
 
-This is personal work. It is not an official Esri product, it is not supported by Esri,
-and it is not intended for commercial use. It is shared in the hope that it is useful to
-others working with deep ocean video. Use it at your own risk, and validate its output
-against your own data before relying on it.
+This is personal work: not an Esri product, not supported by Esri, and not intended for
+commercial use. I am sharing it in case it is useful to other people working with deep
+ocean video. Use it at your own risk, and check what it produces against data you already
+understand before you rely on it.
