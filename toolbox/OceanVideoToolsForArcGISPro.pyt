@@ -919,12 +919,8 @@ class ExtractedFrameImageMetadataGeneration(object):
         rename_images_base_name = params_by_name["rename_images_base_name"].valueAsText or None
         if rename_images_base_name:
             try:
-                rename_result = fct_core.rename_frame_images(export_folder, rename_images_base_name, log=_gp_log)
-                arcpy.AddMessage(
-                    f"Renamed {rename_result['renamed']} image(s) to base name "
-                    f"'{rename_images_base_name}' ({rename_result['skipped']} skipped, "
-                    f"{rename_result['errors']} error(s))"
-                )
+                # rename_frame_images() reports its own totals through log.
+                fct_core.rename_frame_images(export_folder, rename_images_base_name, log=_gp_log)
             except Exception as exc:
                 arcpy.AddError(f"Could not rename frame images: {type(exc).__name__}: {exc}")
                 raise arcpy.ExecuteError from exc
