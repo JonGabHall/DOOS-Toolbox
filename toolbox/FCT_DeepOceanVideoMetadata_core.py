@@ -305,10 +305,28 @@ def export_profile_template(profile, output_path):
 
 
 # Telemetry ingestion
+def resolve_table_path(table):
+    """Return a real catalog path for whatever a table parameter handed over.
+
+    A GPTableView yields a table view name rather than a path when the table was
+    picked from the map, and a CSV added to a map keeps its .csv extension in that
+    name - so testing the extension alone will cheerfully try to open something
+    that is not a file. Describe() resolves the view back to its source.
+    """
+    text = str(table)
+    if Path(text).exists():
+        return text
+    try:
+        described = arcpy.Describe(table)
+    except (OSError, RuntimeError, AttributeError, ValueError):
+        return text
+    return str(getattr(described, "catalogPath", "") or text)
+
+
 def read_telemetry_table(table_path):
     """Read a telemetry table (CSV/TXT, geodatabase table, dBASE, or Excel
     worksheet - anything arcpy recognizes as a table) into a list of dicts."""
-    rows = fusion_core.read_metadata_table(table_path)
+    rows = fusion_core.read_metadata_table(resolve_table_path(table_path))
     if not rows:
         raise ValueError(f"Telemetry table has no rows: {table_path}")
     return rows
@@ -318,16 +336,19 @@ def read_telemetry_header(table_path):
     """Read just the field names of a telemetry table, so the tool dialog
     (updateParameters/updateMessages) can show/validate available fields
     without reading the whole (potentially large) table."""
-    if str(table_path).lower().endswith((".csv", ".txt")):
-        with open(table_path, newline="", encoding="utf-8-sig") as csv_file:
+    resolved = resolve_table_path(table_path)
+    # Reading the file directly preserves the header verbatim; ListFields would
+    # hand back names ArcGIS has sanitised, which then fail to match the raw rows.
+    if Path(resolved).is_file() and resolved.lower().endswith((".csv", ".txt")):
+        with open(resolved, newline="", encoding="utf-8-sig") as csv_file:
             reader = csv.reader(csv_file)
             try:
                 header = next(reader)
             except StopIteration:
-                raise ValueError(f"Telemetry table has no header row: {table_path}")
+                raise ValueError(f"Telemetry table has no header row: {resolved}")
             return [name.strip() for name in header]
 
-    return [f.name for f in arcpy.ListFields(table_path) if f.type not in ("Geometry", "Blob", "Raster")]
+    return [f.name for f in arcpy.ListFields(resolved) if f.type not in ("Geometry", "Blob", "Raster")]
 
 
 # X/Y/Timestamp are required (place/time-order a row for the multiplexer);

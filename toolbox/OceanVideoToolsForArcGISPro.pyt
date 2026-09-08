@@ -1727,10 +1727,9 @@ class GenerateDeepOceanVideoMetadata(object):
 
         telemetry_param = params_by_name["telemetry_table"]
         if telemetry_param.altered and telemetry_param.value:
-            path = telemetry_param.valueAsText
-            # is_file() only applies to plain files (csv/txt/dbf) - gdb
-            # tables/Excel worksheets aren't real files, and GPTableView
-            # already validates those exist before allowing selection.
+            # Resolve first: a table picked from the map is a view name, not a path,
+            # and a map-added CSV keeps its .csv extension in that name.
+            path = video_metadata_core.resolve_table_path(telemetry_param.valueAsText)
             if path.lower().endswith((".csv", ".txt", ".dbf")) and not Path(path).is_file():
                 telemetry_param.setErrorMessage(f"Telemetry table does not exist: {path}")
 
