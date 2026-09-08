@@ -1461,24 +1461,25 @@ class GenerateDeepOceanVideoMetadata(object):
             direction="Input",
             category="Key Sensor Information")
         field_mapping.columns = [
-            ["Field", "Telemetry Column"],
+            ["GPString", "Telemetry Column"],
             ["GPString", "Video Metadata Field"],
         ]
-        # A Field column resolves its own choices from the dependent table, which is
-        # the one way to get a picker inside a value table - filters[0].list cannot
-        # be repopulated at runtime.
-        field_mapping.parameterDependencies = [telemetry_table.name]
+        # Deliberately not a Field column with a dependency on the telemetry table:
+        # that makes ArcGIS register the input as a table view, so valueAsText returns
+        # a bare view name instead of a path and every field pick-list here goes empty.
         field_mapping.filters[1].type = "ValueList"
         field_mapping.filters[1].list = list(video_metadata_core.MAPPABLE_METADATA_FIELDS)
         field_mapping.description = (
             "Sends any other telemetry column straight to a video metadata field - a recorded "
             "heading, pitch, roll or field of view, for instance, in place of the profile's "
-            "assumed value. Pick the source column on the left and its destination on the "
-            "right. A mapped value overrides whatever the profile or auto-detection would "
-            "have supplied, but a blank cell leaves the existing value alone. ObjectID, "
-            "Precision Time Stamp, AcquisitionDate, Sensor Longitude and Sensor Latitude are "
-            "not listed because this tool computes them. An unrecognised column name is "
-            "reported as a warning and skipped, rather than failing the run."
+            "assumed value. Type the column name on the left exactly as it appears in the "
+            "table header - the Z / Depth / Altitude Field drop-down above lists the same "
+            "names if you need to check the spelling - and pick its destination on the right. "
+            "A mapped value overrides whatever the profile or auto-detection would have "
+            "supplied, but a blank cell leaves the existing value alone. ObjectID, Precision "
+            "Time Stamp, AcquisitionDate, Sensor Longitude and Sensor Latitude are not listed "
+            "because this tool computes them. An unrecognised column name is reported as a "
+            "warning and skipped, rather than failing the run."
         )
         params.append(field_mapping)
 
