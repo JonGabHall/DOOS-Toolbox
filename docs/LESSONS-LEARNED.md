@@ -98,19 +98,21 @@ of the parameter. Verify such strings against a working example or the exact dia
 plain-English reading of a geoprocessing keyword can be the opposite of what it does for
 your case.
 
-**Convert Video Metadata field-matches only the fields Esri documents.** Its reference
-page lists thirteen; anything else is dropped, under any spelling. Far distance is not
-among them, and neither is it in the multiplexer's own
-`FMV_Multiplexer_Field_Mapping_Template.csv` (`C:\Program Files\ArcGIS\Pro\Resources\MotionImagery`),
-which is the authoritative list of 76 accepted headings — the only distance tags there are
-21 `Slant Range` and 57 `Ground Range`. So a per-frame far distance cannot be carried to
-the multiplexer as such, whatever the column is called.
+**Convert Video Metadata silently blanks a value whose format it dislikes.** `Sensor Far
+Distance` survives the conversion only when the column is spelled exactly that way *and*
+the value is a whole number. Measured, with everything else held constant: `4` comes
+through as `4`; `4.0` comes through as an empty cell; `Far Distance` is dropped, column
+and all. Nothing is logged in any of those cases. So an empty column on the far side does
+not mean the field is unsupported — check the value's format first. Note also that the
+multiplexer's own `FMV_Multiplexer_Field_Mapping_Template.csv`
+(`C:\Program Files\ArcGIS\Pro\Resources\MotionImagery`) lists 76 headings and this is not
+one of them, so that file is not a complete account of what the chain accepts.
 
-**Do not inject values into the converted file to fill a gap.** Writing a value into a
-column the multiplexer does not recognise turns a harmless `WARNING 003950: Empty metadata
-value` into `WARNING 002651: Unable to parse the input metadata file`. An empty column it
-ignores; a populated column it cannot map, it complains about. Check a heading against the
-template before deciding a blank is a bug.
+**Filling an unrecognised column is worse than leaving it empty.** Writing a value into a
+column the multiplexer cannot map turns a harmless `WARNING 003950: Empty metadata value`
+into `WARNING 002651: Unable to parse the input metadata file`. Post-processing the
+converted file to "fix" a blank is therefore the wrong instinct: find out why the value
+was dropped instead.
 
 ## Data
 

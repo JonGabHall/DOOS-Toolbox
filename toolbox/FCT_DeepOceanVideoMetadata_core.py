@@ -175,7 +175,7 @@ VIDEO_METADATA_TABLE_FIELDS = [
     "Platform Heading Angle", "Platform Pitch Angle (Full)", "Platform Roll Angle (Full)",
     "Sensor Relative Azimuth Angle", "Sensor Relative Elevation Angle", "Sensor Relative Roll Angle",
     "Sensor Horizontal Field of View", "Sensor Vertical Field of View",
-    "Near Distance", "Far Distance", "Camera Height Above Seafloor",
+    "Near Distance", "Sensor Far Distance", "Camera Height Above Seafloor",
 ]
 
 # arcpy field type per column, for the geodatabase-table write path.
@@ -194,7 +194,7 @@ VIDEO_METADATA_FIELD_TYPES = {
     "Sensor Relative Azimuth Angle": "DOUBLE", "Sensor Relative Elevation Angle": "DOUBLE",
     "Sensor Relative Roll Angle": "DOUBLE",
     "Sensor Horizontal Field of View": "DOUBLE", "Sensor Vertical Field of View": "DOUBLE",
-    "Near Distance": "DOUBLE", "Far Distance": "DOUBLE", "Camera Height Above Seafloor": "DOUBLE",
+    "Near Distance": "DOUBLE", "Sensor Far Distance": "LONG", "Camera Height Above Seafloor": "DOUBLE",
 }
 
 # This tool computes these itself - ObjectID is the row index, the two time
@@ -729,6 +729,10 @@ def build_video_metadata_table(
     total_records = len(records)
     progress_increment = 10 ** max(int(math.log10(total_records)) - 1, 0) if total_records > 100 else 0
     metadata_rows = []
+    # Convert Video Metadata silently blanks Sensor Far Distance when the value carries
+    # a decimal point, so it is rounded to whole metres here rather than lost there.
+    far_distance = profile.get("far_distance")
+    far_distance = None if far_distance is None else int(round(float(far_distance)))
     for i, record in enumerate(records):
         if progress_increment and i % progress_increment == 0:
             log(f"Building video metadata rows: {i}/{total_records}...")
@@ -757,7 +761,7 @@ def build_video_metadata_table(
             "Sensor Horizontal Field of View": profile.get("hfov"),
             "Sensor Vertical Field of View": profile.get("vfov"),
             "Near Distance": profile.get("near_distance"),
-            "Far Distance": profile.get("far_distance"),
+            "Sensor Far Distance": far_distance,
             "Camera Height Above Seafloor": profile.get("camera_height"),
         }
         # A blank cell must not wipe out a profile-supplied value.
