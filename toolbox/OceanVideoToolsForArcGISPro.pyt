@@ -1422,6 +1422,63 @@ class GenerateDeepOceanVideoMetadata(object):
         )
         params.append(time_field)
 
+        z_field = arcpy.Parameter(
+            displayName="Z / Depth / Altitude Field",
+            name="z_field",
+            datatype="GPString",
+            parameterType="Optional",
+            direction="Input",
+            category="Key Sensor Information")
+        z_field.description = (
+            "Column holding the platform's vertical position, written as-is to Sensor True "
+            "Altitude. Leave blank to auto-detect by name. Optional data: a row with no Z is "
+            "kept, not skipped. No unit or sign conversion is applied, so a depth recorded as "
+            "a positive number stays positive. If the column is absent and no constant is set "
+            "below, Sensor True Altitude is left empty."
+        )
+        params.append(z_field)
+
+        z_constant = arcpy.Parameter(
+            displayName="Constant Z Value (used where the telemetry has none)",
+            name="z_constant",
+            datatype="GPDouble",
+            parameterType="Optional",
+            direction="Input",
+            category="Key Sensor Information")
+        z_constant.description = (
+            "Applied to every row whose Z is missing - all of them, when the table has no Z "
+            "column at all. Rows that carry their own Z keep it. Use this when the platform "
+            "held a known working depth or altitude that the log never recorded. Units and "
+            "sign must match whatever the rest of the workflow expects; nothing is converted."
+        )
+        params.append(z_constant)
+
+        field_mapping = arcpy.Parameter(
+            displayName="Additional Field Mapping",
+            name="additional_field_mapping",
+            datatype="GPValueTable",
+            parameterType="Optional",
+            direction="Input",
+            category="Key Sensor Information")
+        field_mapping.columns = [
+            ["GPString", "Telemetry Column"],
+            ["GPString", "Video Metadata Field"],
+        ]
+        field_mapping.filters[1].type = "ValueList"
+        field_mapping.filters[1].list = list(video_metadata_core.MAPPABLE_METADATA_FIELDS)
+        field_mapping.description = (
+            "Sends any other telemetry column straight to a video metadata field - a recorded "
+            "heading, pitch, roll or field of view, for instance, in place of the profile's "
+            "assumed value. Type the column name on the left exactly as it appears in the "
+            "table header, and pick its destination on the right. A mapped value overrides "
+            "whatever the profile or auto-detection would have supplied, but a blank cell "
+            "leaves the existing value alone. ObjectID, Precision Time Stamp, AcquisitionDate, "
+            "Sensor Longitude and Sensor Latitude are not listed because this tool computes "
+            "them. An unrecognised column name is reported as a warning and skipped, rather "
+            "than failing the run."
+        )
+        params.append(field_mapping)
+
         # --- Video Acquisition Profile Overrides (pre-filled per-profile) ---
         for param_name, display_name, _key in _PROFILE_OVERRIDE_SPECS:
             p = arcpy.Parameter(
@@ -1742,6 +1799,7 @@ class GenerateDeepOceanVideoMetadata(object):
             "x": params_by_name["x_field"].valueAsText or None,
             "y": params_by_name["y_field"].valueAsText or None,
             "timestamp": params_by_name["time_field"].valueAsText or None,
+            "z": params_by_name["z_field"].valueAsText or None,
         }
 
         manual_overrides = {
@@ -1782,6 +1840,8 @@ class GenerateDeepOceanVideoMetadata(object):
                 # if .value turns out to be an opaque object instead (rare, direct-call only).
                 input_srs=params_by_name["input_srs"].value,
                 resample_interval_seconds=params_by_name["resample_interval"].value,
+                z_constant=params_by_name["z_constant"].value,
+                extra_field_mappings=params_by_name["additional_field_mapping"].value,
                 camera_id=params_by_name["camera_id"].value,
                 camera_ncols=params_by_name["camera_ncols"].value,
                 camera_nrows=params_by_name["camera_nrows"].value,

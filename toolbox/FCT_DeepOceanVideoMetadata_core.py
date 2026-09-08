@@ -197,6 +197,73 @@ VIDEO_METADATA_FIELD_TYPES = {
     "Near Distance": "DOUBLE", "Far Distance": "DOUBLE", "Camera Height Above Seafloor": "DOUBLE",
 }
 
+# This tool computes these itself - ObjectID is the row index, the two time
+# fields come from the parsed timestamp, and lon/lat are reprojected to WGS84.
+# Mapping a telemetry column onto one of them would contradict the row it
+# belongs to, so they are not offered as mapping targets.
+RESERVED_METADATA_FIELDS = frozenset({
+    "ObjectID", "Precision Time Stamp", "AcquisitionDate",
+    "Sensor Longitude", "Sensor Latitude",
+})
+
+MAPPABLE_METADATA_FIELDS = [
+    name for name in VIDEO_METADATA_TABLE_FIELDS if name not in RESERVED_METADATA_FIELDS
+]
+
+
+def coerce_to_field_type(value, target_field):
+    """Cast a raw telemetry value to the output column's declared type,
+    returning None when it cannot be represented."""
+    if is_null_like(value):
+        return None
+    field_type = VIDEO_METADATA_FIELD_TYPES.get(target_field, "TEXT")
+    if field_type == "DOUBLE":
+        return to_float(value)
+    if field_type == "LONG":
+        number = to_float(value)
+        return None if number is None else int(number)
+    return str(value)
+
+
+def normalize_field_mappings(mappings, field_names=None, log=print):
+    """Validate user-supplied (telemetry column -> metadata field) pairs.
+
+    Accepts a dict or any sequence of two-item pairs. Every rejection is
+    logged rather than raised: a bad mapping row should cost the user that
+    one field, not the whole run.
+    """
+    if not mappings:
+        return []
+    pairs = mappings.items() if isinstance(mappings, dict) else mappings
+    known_targets = {name.lower(): name for name in MAPPABLE_METADATA_FIELDS}
+    available = {str(name).lower() for name in (field_names or [])}
+
+    normalized = []
+    for pair in pairs:
+        try:
+            source, target = pair
+        except (TypeError, ValueError):
+            log(f"WARNING: ignoring malformed field mapping entry: {pair!r}")
+            continue
+        if is_null_like(source) or is_null_like(target):
+            continue
+        source, target = str(source).strip(), str(target).strip()
+        resolved_target = known_targets.get(target.lower())
+        if resolved_target is None:
+            if target in RESERVED_METADATA_FIELDS:
+                log(f"WARNING: '{target}' is computed by this tool and cannot be mapped to - "
+                    f"ignoring the mapping from '{source}'.")
+            else:
+                log(f"WARNING: '{target}' is not a video metadata field - ignoring the mapping "
+                    f"from '{source}'.")
+            continue
+        if available and source.lower() not in available:
+            log(f"WARNING: telemetry column '{source}' is not in the input table - "
+                f"'{resolved_target}' will keep its existing value.")
+            continue
+        normalized.append((source, resolved_target))
+    return normalized
+
 
 def build_profile(profile_name, manual_overrides=None):
     """Merge a named Video Acquisition Profile with any non-empty manual overrides.
@@ -484,7 +551,12 @@ def resample_records(records, interval_seconds):
         frac = 0.0 if span <= 0 else (target_dt - before["_dt"]).total_seconds() / span
 
         def lerp(key):
-            return before[key] + (after[key] - before[key]) * frac
+            # Z is optional, and a log with no Z at all would otherwise fail here
+            # on None arithmetic rather than simply carrying the gap through.
+            start_value, end_value = before[key], after[key]
+            if start_value is None or end_value is None:
+                return start_value if end_value is None else end_value
+            return start_value + (end_value - start_value) * frac
 
         new_record = dict(before)
         new_record["x"] = lerp("x")
@@ -510,6 +582,8 @@ def build_video_metadata_table(
     manual_overrides=None,
     input_srs=None,
     resample_interval_seconds=None,
+    z_constant=None,
+    extra_field_mappings=None,
     camera_id=1,
     camera_ncols=None,
     camera_nrows=None,
@@ -548,6 +622,10 @@ def build_video_metadata_table(
     profile = build_profile(profile_name, manual_overrides)
     log(f"Resolved telemetry fields: {resolved}")
     log(f"Using Video Acquisition Profile '{profile_name}': {profile.get('description', '')}")
+    mappings = normalize_field_mappings(extra_field_mappings, field_names, log=log)
+    if mappings:
+        log("Additional field mappings: "
+            + ", ".join(f"{source} -> {target}" for source, target in mappings))
 
     # --- Normalize rows, skipping any missing the required X/Y/Timestamp ---
     records = []
@@ -569,6 +647,10 @@ def build_video_metadata_table(
             "pitch": to_float(raw_row.get(resolved["pitch"])) if resolved["pitch"] else None,
             "roll": to_float(raw_row.get(resolved["roll"])) if resolved["roll"] else None,
             "filename": raw_row.get(resolved["filename"]) if resolved["filename"] else None,
+            "_mapped": {
+                target: coerce_to_field_type(raw_row.get(source), target)
+                for source, target in mappings
+            },
         })
     if skipped:
         log(f"WARNING: skipped {skipped} telemetry row(s) missing X, Y, or a parseable Timestamp")
@@ -577,6 +659,19 @@ def build_video_metadata_table(
 
     # --- Order by timestamp (always present now) ---
     records.sort(key=lambda r: r["_dt"])
+
+    # --- Fill Z from the supplied constant where the telemetry has none ---
+    # Ahead of resampling, so interpolation has real values at both ends.
+    if z_constant is not None:
+        filled = [record for record in records if record["z"] is None]
+        for record in filled:
+            record["z"] = z_constant
+        if filled:
+            log(f"Applied the constant Z value {z_constant} to {len(filled)} row(s) that had "
+                "no Z in the telemetry.")
+    elif all(record["z"] is None for record in records):
+        log("WARNING: no Z column was resolved and no constant Z was supplied - Sensor True "
+            "Altitude will be empty on every row.")
 
     # --- Optional resampling to a fixed time interval ---
     if resample_interval_seconds:
@@ -640,6 +735,12 @@ def build_video_metadata_table(
             "Far Distance": profile.get("far_distance"),
             "Camera Height Above Seafloor": profile.get("camera_height"),
         }
+        # A blank cell must not wipe out a profile-supplied value.
+        row.update({
+            target: value
+            for target, value in (record.get("_mapped") or {}).items()
+            if value is not None
+        })
         metadata_rows.append(row)
 
     intermediate_table_path = write_video_metadata_table(metadata_rows, output_folder, output_name, log=log)
