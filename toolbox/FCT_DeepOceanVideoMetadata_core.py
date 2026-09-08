@@ -210,6 +210,59 @@ MAPPABLE_METADATA_FIELDS = [
     name for name in VIDEO_METADATA_TABLE_FIELDS if name not in RESERVED_METADATA_FIELDS
 ]
 
+# Convert Video Metadata field-matches only the MISB fields Esri documents, but it
+# writes the multiplexer's full column set regardless - so a column outside that list
+# comes back present and empty however it is spelled in the input. These are the ones
+# this tool has values for; they get written back in after the conversion.
+CONVERT_UNMATCHED_FIELDS = ["Sensor Far Distance", "Sensor Ellipsoid Height Extended"]
+
+
+def backfill_unmatched_fields(converted_csv, metadata_rows, log=print):
+    """Write values into columns Convert Video Metadata left empty.
+
+    Returns the column names actually filled. Refuses to touch anything if the
+    converted file's row count does not match what was generated, since the two
+    are matched positionally and a mismatch would shift every value.
+    """
+    path = Path(converted_csv)
+    with open(path, newline="", encoding="utf-8-sig") as handle:
+        reader = csv.reader(handle)
+        try:
+            header = next(reader)
+        except StopIteration:
+            return []
+        rows = list(reader)
+
+    fillable = []
+    for name in CONVERT_UNMATCHED_FIELDS:
+        if name not in header:
+            continue
+        index = header.index(name)
+        if any(index < len(row) and row[index].strip() for row in rows):
+            continue
+        if any(row.get(name) is not None for row in metadata_rows):
+            fillable.append((name, index))
+    if not fillable:
+        return []
+    if len(rows) != len(metadata_rows):
+        log(f"WARNING: the converted file has {len(rows)} row(s) against {len(metadata_rows)} "
+            "generated, so " + ", ".join(n for n, _ in fillable) + " was left empty rather "
+            "than risk pairing values with the wrong rows.")
+        return []
+
+    for row, source in zip(rows, metadata_rows):
+        for name, index in fillable:
+            while len(row) <= index:
+                row.append("")
+            value = source.get(name)
+            row[index] = "" if value is None else str(value)
+
+    with open(path, "w", newline="", encoding="utf-8") as handle:
+        writer = csv.writer(handle)
+        writer.writerow(header)
+        writer.writerows(rows)
+    return [name for name, _ in fillable]
+
 
 def coerce_to_field_type(value, target_field):
     """Cast a raw telemetry value to the output column's declared type,
@@ -768,6 +821,10 @@ def build_video_metadata_table(
     final_table_path, mapping_file_path = run_convert_video_metadata(
         intermediate_table_path, output_folder, output_name, log=log
     )
+    backfilled = backfill_unmatched_fields(final_table_path, metadata_rows, log=log)
+    if backfilled:
+        log("Wrote " + ", ".join(backfilled) + " into the converted file - Convert Video "
+            "Metadata does not field-match those, so it leaves them empty.")
 
     return {
         "video_metadata_table": final_table_path,
