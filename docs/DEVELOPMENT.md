@@ -71,6 +71,23 @@ Two things worth knowing:
   around a hundred errors on a healthy toolbox. See
   [LESSONS-LEARNED.md](LESSONS-LEARNED.md).
 
+## Generating the parameter help
+
+A parameter's `.description` never reaches the dialog on its own — arcpy has no such
+property and the geoprocessing framework discards it. The information icon beside each
+parameter reads the tool's metadata sidecar instead, so the sidecars are generated from
+the `.pyt`, which stays the single source:
+
+```powershell
+& $py tools\generate_tool_metadata.py OceanVideoToolsForArcGISPro.pyt
+& $py tools\generate_tool_metadata.py OceanVideoToolsForArcGISPro.pyt GenerateDeepOceanVideoMetadata
+```
+
+Each `<Toolbox>.<Tool>.pyt.xml` gets a `<param>` entry per parameter, carrying the
+description as `<dialogReference>` paragraphs. Derived outputs are declared without help
+text, since they never render in the dialog. Run this after editing any `.description`
+and before building, or the dialog keeps showing the previous wording.
+
 ## Checklist before releasing
 
 1. `& $py tools\build_release.py` — must end with `Build OK`.

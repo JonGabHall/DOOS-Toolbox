@@ -20,9 +20,26 @@ Everything here concerns *Generate Deep Ocean Video Metadata* unless stated othe
   the same thing suppresses the video footprint, because the ellipsoid figure resolves to
   an orthometric height below the elevation surface. Together with **Write Sensor Far
   Distance**, these are the two settings to clear first when a footprint does not appear.
+- **Parameter help in the tool dialog, for every tool.** The information icon beside each
+  parameter now describes what the parameter expects: units, accepted formats, sign
+  conventions, and what happens to a row that cannot be read. Coverage is every input
+  parameter of all five tools.
 
 ### Fixed
 
+- **Parameter help had never reached the dialog.** `arcpy.Parameter` has no `description`
+  property, so the descriptions written in the toolbox were discarded by the
+  geoprocessing framework and the information icons were empty. The text lives in each
+  tool's metadata sidecar instead, generated from those same descriptions.
+- **Editing an acquisition profile's override values did nothing.** The pre-fill guard
+  remembered the last profile on the tool object, which ArcGIS Pro rebuilds for every
+  validation pass, so all eight override fields were rewritten after each edit anywhere
+  on the dialog. A preset profile reverted the entered numbers, and *Custom*, whose
+  defaults are all empty, blanked each field as focus moved.
+- **A day-first, dot-separated timestamp was unreadable**, and a log using it was rejected
+  in full: every row was skipped as having an unparseable timestamp, and the run ended
+  with `No telemetry rows had usable X, Y, and Timestamp values`. `01.09.2022 00:00:00`
+  now parses as 1 September. Slash-separated dates are still read month-first.
 - **Video footprints never appeared, because camera tilt was written in the wrong
   convention.** The acquisition profiles measure pitch from nadir, where 0 is straight
   down. ArcGIS reads `Sensor Relative Elevation Angle` as tilt from the horizontal plane,
@@ -59,6 +76,8 @@ Everything here concerns *Generate Deep Ocean Video Metadata* unless stated othe
 - The camera pitch override is now labelled **Camera Tilt from Nadir**, since the value is
   converted before being written rather than passed through as the MISB field. The
   parameter name is unchanged, so existing scripts keep working.
+- Parameter and tool descriptions across all five tools were rewritten in a plainer,
+  more technical register. Wording only; no behaviour changed.
 
 ## 1.0.0 — first public release
 

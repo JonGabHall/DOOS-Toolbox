@@ -25,8 +25,11 @@ Before opening an issue, check **Troubleshooting** and **Known issues** in the
 2. Read [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for how to validate a change.
 3. Keep tool classes thin. All real logic belongs in the matching `FCT_*_core.py` module,
    so it can be read and tested without a dialog.
-4. Every new input parameter needs a `.description`. It is what users see in the help
-   panel, and the validation script fails without it.
+4. Every new input parameter needs a `.description`. The validation script fails without
+   one, and it is the source the tool metadata sidecars are generated from. Note that
+   ArcGIS never reads `.description` itself — see [docs/LESSONS-LEARNED.md](docs/LESSONS-LEARNED.md)
+   — so regenerate the sidecars after changing one, or the dialog keeps showing the old
+   text.
 5. Do not add a third-party dependency without discussion. The toolbox deliberately runs
    on a default ArcGIS Pro installation; the one optional package (PyAV) gates a single
    feature and is imported lazily so its absence never breaks anything else.

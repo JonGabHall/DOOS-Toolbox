@@ -45,6 +45,23 @@ during validation, capture it onto the tool instance and report it with
 `setWarningMessage()` on the relevant parameter. This repository does that for telemetry
 header reads and profile loads.
 
+**A parameter's `.description` is not read by ArcGIS.** `arcpy.Parameter` has no such
+property; setting it only attaches a stray Python attribute, and importing a toolbox and
+reading the parameters back shows the geoprocessing framework discards it. The text behind
+the information icon comes from the tool's metadata sidecar
+(`<Toolbox>.<Tool>.pyt.xml`), as a `<param><dialogReference>` entry. Every parameter in
+this toolbox had a carefully written `.description` that no user could see until the
+sidecars were generated from them. See [DEVELOPMENT.md](DEVELOPMENT.md).
+
+**State stored on `self` does not survive a validation pass.** ArcGIS Pro rebuilds the tool
+object for each pass, so `getattr(self, "_last_seen", sentinel)` always returns the
+sentinel and any "has this changed since last time" test built on it is always true. A
+pre-fill guard written that way overwrote the user's edits after every keystroke elsewhere
+on the dialog. Use the parameter's own `hasBeenValidated`/`altered` properties, which the
+framework maintains, and put genuinely persistent state in a hidden parameter. Within a
+single pass `self` is fine — `updateMessages()` runs on the same object as
+`updateParameters()`, which is what makes the warning hand-off above work.
+
 **Look parameters up by name, never by index.** Use
 `params_by_name = {p.name: p for p in parameters}`. Index-based access breaks silently
 when a parameter is inserted or reordered — the wrong parameter is modified and nothing
