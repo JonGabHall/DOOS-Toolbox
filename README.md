@@ -3,20 +3,11 @@
 A prototype, proof of concept ArcGIS Pro Python toolbox for turning deep ocean video into documented, analysis-ready
 still imagery.
 
-Video from an ROV, an AUV, a towed sled or a drop camera almost never arrives
-self-describing. The vehicle records one thing, the navigation log records another, and
-the two meet only through a timestamp; often not even reliably through that. Closing the
-gap by hand is slow, and it is where the errors get in.
+Video acquired in deep ocean environments often come as multiple, separate files that are not sync'd or fused. The vehicle records one thing, the navigation log records another, and often have various schema, value and or generation differences with a variety of levels of detail regarding telemetry, sensor data and accuracy. 
 
-So these five tools do it instead. They tell you whether a video and its telemetry line up
-at all, before you have spent an afternoon assuming they do. They build the metadata that
-lets telemetry be written into the video itself. They reconstruct the tables that frame
-exports need but never carry. And they put standards-compliant metadata onto every frame
-that comes out the far end, ready for a mosaic or an oriented imagery dataset.
+These five tools were generated to help work with deep ocean video data and create pipelines using existing ArcGIS Pro tools for video and frame exploration, exploitation and management. 
 
-Most of the work sits in the last two stages: getting frames out of the video, and giving
-those frames complete metadata. That is where the standards live (iFDO, BIIGLE, MISB), and
-it is the part that otherwise has to be done by hand, dive after dive.
+Most of the work sits in the two final stages of video frame generation: generating metadata for extracted frames, and managing the generated frames. Additional tools were generated for assisting in providing solutions for defining or generating missing telemetry metadata and inspecting input datasets. Future work for rule based frame extraction and managing annotations should be explored. 
 
 ## Workflow
 
