@@ -141,8 +141,6 @@ def _ifdo_param_names(spec):
     name, _, _, _, _, kind = spec
     return [name, f"{name}_uri"] if kind == "object" else [name]
 
-_UNSET = object()  # sentinel distinct from any real parameter value, including None
-
 
 # ============================================================================
 # SAFE MODULE IMPORT - No sys.path manipulation
@@ -1290,8 +1288,9 @@ class GenerateDeepOceanVideoMetadata(object):
             "view, near and far distance, and height above the seafloor - so a usable video "
             "metadata file can still be produced from an incomplete source. Selecting a "
             "profile immediately pre-fills the override fields below with its values, where "
-            "you can inspect and adjust them. Switching profiles overwrites those fields, "
-            "including any manual edits."
+            "you can inspect and adjust them; your edits are kept until you switch profiles, "
+            "which overwrites those fields again. Choose Custom to fill them in yourself - it "
+            "pre-fills nothing and overwrites nothing."
         )
         params.append(video_acquisition_profile)
 
@@ -1386,9 +1385,19 @@ class GenerateDeepOceanVideoMetadata(object):
             direction="Input",
             category="Key Sensor Information")
         x_field.description = (
-            "Column holding the east-west position, in the units of the Coordinate System of "
-            "Telemetry X/Y above. Leave blank to auto-detect by name. Required data: a row "
-            "with no usable X is skipped entirely."
+            "Column holding the east-west position: longitude if the log is geographic, "
+            "easting if it is projected. Leave blank to auto-detect by name. Required data: a "
+            "row with no usable X is skipped entirely.\n\n"
+            "UNITS: whatever the Coordinate System of Telemetry X/Y above declares - decimal "
+            "degrees for a geographic system, linear units (usually meters) for a projected "
+            "one. The number is read exactly as written. Degrees-minutes-seconds text is not "
+            "parsed; convert it to decimal degrees first. A value with six or seven digits "
+            "before the decimal point is an easting, not a longitude.\n\n"
+            "PROJECTION SENSITIVE: this column is reprojected from the declared coordinate "
+            "system to WGS84 longitude/latitude, which MISB ST 0601 requires. Declaring the "
+            "wrong system does not raise an error - it silently moves the whole track, often "
+            "to another continent. Check the resolved longitude/latitude in the output before "
+            "multiplexing."
         )
         params.append(x_field)
 
@@ -1400,9 +1409,20 @@ class GenerateDeepOceanVideoMetadata(object):
             direction="Input",
             category="Key Sensor Information")
         y_field.description = (
-            "Column holding the north-south position, in the units of the Coordinate System of "
-            "Telemetry X/Y above. Leave blank to auto-detect by name. Required data: a row "
-            "with no usable Y is skipped entirely."
+            "Column holding the north-south position: latitude if the log is geographic, "
+            "northing if it is projected. Leave blank to auto-detect by name. Required data: a "
+            "row with no usable Y is skipped entirely.\n\n"
+            "UNITS: whatever the Coordinate System of Telemetry X/Y above declares - decimal "
+            "degrees for a geographic system, linear units (usually meters) for a projected "
+            "one. The number is read exactly as written. Degrees-minutes-seconds text is not "
+            "parsed; convert it to decimal degrees first. A large positive northing in the "
+            "millions from a southern-hemisphere survey carries a 10,000,000 m false "
+            "northing and only makes sense against a southern UTM zone.\n\n"
+            "PROJECTION SENSITIVE: this column is reprojected from the declared coordinate "
+            "system to WGS84 longitude/latitude, which MISB ST 0601 requires. Declaring the "
+            "wrong system does not raise an error - it silently moves the whole track, often "
+            "to another continent. Check the resolved longitude/latitude in the output before "
+            "multiplexing."
         )
         params.append(y_field)
 
@@ -1416,9 +1436,21 @@ class GenerateDeepOceanVideoMetadata(object):
         time_field.description = (
             "Column holding each row's date and time. Leave blank to auto-detect by name. "
             "Required data: a row whose timestamp is missing or unparseable is skipped, "
-            "because the multiplexer aligns metadata to video frames by time. Epoch numbers, "
-            "ISO 8601, and common US M/D/YYYY formats are all understood; times with no zone "
-            "are treated as UTC."
+            "because the multiplexer aligns metadata to video frames by time. If no row "
+            "parses, the run fails with 'No telemetry rows had usable X, Y, and Timestamp "
+            "values'.\n\n"
+            "ACCEPTED: a Date-type field; a plain epoch number in seconds, milliseconds or "
+            "microseconds; ISO 8601 text (2022-09-01T00:00:00Z); M/D/YYYY with or without "
+            "AM/PM; YYYY/MM/DD; M-D-YYYY; and dot-separated day-first D.M.YYYY "
+            "(01.09.2022 00:00:00 = 1 September). Unix time is accepted but not required.\n\n"
+            "WRITTEN AS: the value is converted, never passed through. Each parsed time "
+            "becomes Precision Time Stamp (integer microseconds since 1 January 1970, the "
+            "form MISB and the multiplexer require) plus a readable AcquisitionDate copy. "
+            "Rows are sorted into time order before anything else is computed.\n\n"
+            "TIME ZONE: a timestamp with no zone is assumed to be UTC. A log kept in local "
+            "time still multiplexes correctly, because spacing and order are unaffected, but "
+            "every absolute time will be off by that zone's offset. Convert to UTC first if "
+            "the video has to line up with other time-stamped records."
         )
         params.append(time_field)
 
@@ -1432,9 +1464,19 @@ class GenerateDeepOceanVideoMetadata(object):
         z_field.description = (
             "Column holding the platform's vertical position, written as-is to Sensor True "
             "Altitude. Leave blank to auto-detect by name. Optional data: a row with no Z is "
-            "kept, not skipped. No unit or sign conversion is applied, so a depth recorded as "
-            "a positive number stays positive. If the column is absent and no constant is set "
-            "below, Sensor True Altitude is left empty."
+            "kept, not skipped. If the column is absent and no constant is set below, Sensor "
+            "True Altitude is left empty.\n\n"
+            "UNITS AND SIGN - the most common mistake: Sensor True Altitude is metres above "
+            "mean sea level, positive up. Nothing is converted here, so a depth column "
+            "(positive down, as most vehicle logs record it) must be negated before it is "
+            "used - a raw 921.62 states the vehicle is 921 m in the air rather than 921 m "
+            "under water, and the resulting footprints are meaningless. Feet are not "
+            "converted to metres either.\n\n"
+            "WHICH COLUMN: this is the vehicle's own depth or altitude relative to sea level, "
+            "not its height above the seafloor. An altimeter reading (height above the "
+            "bottom) belongs in Camera Height Above Seafloor under Video Acquisition Profile "
+            "Overrides instead. Nothing here is validated against bathymetry, so a wrong sign "
+            "or unit passes through silently."
         )
         params.append(z_field)
 
@@ -1448,8 +1490,9 @@ class GenerateDeepOceanVideoMetadata(object):
         z_constant.description = (
             "Applied to every row whose Z is missing - all of them, when the table has no Z "
             "column at all. Rows that carry their own Z keep it. Use this when the platform "
-            "held a known working depth or altitude that the log never recorded. Units and "
-            "sign must match whatever the rest of the workflow expects; nothing is converted."
+            "held a known working depth or altitude that the log never recorded. Same units "
+            "and sign as the Z field above: metres above mean sea level, positive up, so a "
+            "vehicle working at 900 m depth is entered as -900. Nothing is converted."
         )
         params.append(z_constant)
 
@@ -1533,7 +1576,9 @@ class GenerateDeepOceanVideoMetadata(object):
             p.description = (
                 "Pre-filled from the Video Acquisition Profile selected above. Edit it to "
                 "describe your actual camera rig; the value here is written to every output "
-                "row. Changing the profile selection overwrites this field again."
+                "row. Your edits are kept until you change the profile selection, which "
+                "overwrites this field again. The Custom profile never pre-fills or "
+                "overwrites anything - supply every value here yourself."
             )
             params.append(p)
 
@@ -1721,20 +1766,36 @@ class GenerateDeepOceanVideoMetadata(object):
     def _prefill_profile_overrides(self, params_by_name):
         """Pre-fill the 8 override fields with the selected profile's
         defaults on profile change (last selection wins, overwrites edits)."""
-        profile_name = params_by_name["video_acquisition_profile"].valueAsText
-        if profile_name == getattr(self, "_profile_override_state", _UNSET):
+        profile_param = params_by_name["video_acquisition_profile"]
+        # The change test has to come from the parameter itself: Pro rebuilds the
+        # tool object for every validation pass, so nothing cached on self survives
+        # to the next one, and a self-based test would re-fill (and so wipe out the
+        # user's edits) after every keystroke elsewhere on the dialog.
+        if profile_param.hasBeenValidated:
             return
-        self._profile_override_state = profile_name
+        profile_name = profile_param.valueAsText
+        # Custom's defaults are all None - writing them would erase what's being typed.
+        if not profile_name or profile_name == video_metadata_core.CUSTOM_PROFILE_NAME:
+            self._profile_override_error = None
+            return
 
         try:
-            profile_defaults = video_metadata_core.build_profile(profile_name) if profile_name else {}
+            profile_defaults = video_metadata_core.build_profile(profile_name)
             self._profile_override_error = None
         except ValueError as exc:
-            profile_defaults = {}
             # Surfaced by updateMessages - a dialog callback cannot log.
             self._profile_override_error = str(exc)
+            return
+
+        # Nothing validated yet means the dialog is only now opening, so any values
+        # present came with it (a re-run from history, a model, a batch): fill the
+        # blanks but keep those, rather than resetting them to the profile's numbers.
+        dialog_opening = all(not p.hasBeenValidated for p in params_by_name.values())
         for param_name, _base_display, key in _PROFILE_OVERRIDE_SPECS:
-            params_by_name[param_name].value = profile_defaults.get(key)
+            override_param = params_by_name[param_name]
+            if dialog_opening and override_param.value is not None:
+                continue
+            override_param.value = profile_defaults.get(key)
 
     def _read_telemetry_header(self, telemetry_param):
         """Read+cache the telemetry table's fields (keyed on path, plus mtime
