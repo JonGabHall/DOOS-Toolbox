@@ -1,6 +1,6 @@
 # Ocean Video Tools for ArcGIS Pro
 
-An ArcGIS Pro Python toolbox for turning deep ocean video into documented, analysis-ready
+A prototype, proof of concept ArcGIS Pro Python toolbox for turning deep ocean video into documented, analysis-ready
 still imagery.
 
 Video from an ROV, an AUV, a towed sled or a drop camera almost never arrives
