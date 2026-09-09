@@ -1,2 +1,115 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<metadata xml:lang="en"><Esri><CreaDate>20260901</CreaDate><CreaTime>12441900</CreaTime><ArcGISFormat>1.0</ArcGISFormat><SyncOnce>TRUE</SyncOnce></Esri></metadata>
+<metadata xml:lang="en">
+    <Esri>
+        <CreaDate>20260901</CreaDate>
+        <CreaTime>12441900</CreaTime>
+        <ArcGISFormat>1.0</ArcGISFormat>
+        <SyncOnce>TRUE</SyncOnce>
+    </Esri>
+    <tool name="CrossReferenceVideoPlayerFrames" displayname="Cross-Reference Video Player Frame Exports" toolboxalias="OceanVideoTools" xmlns="">
+        <parameters>
+            <param name="image_folder" displayname="Video Player Frame Export Folder" type="Required" direction="Input" datatype="Folder" expression="image_folder">
+                <dialogReference>
+                    <para>Folder holding frames exported one at a time from the ArcGIS Pro video player. Those files have no Frame Table of their own, only a filename ending in the frame's elapsed video time in milliseconds: a grab at 00:01.767 is saved as '..._1767.tif'. That suffix is what the match is made on, so the files must not be renamed beforehand. Output tables are written back into this folder. A re-run after exporting more frames processes only the new ones.</para>
+                </dialogReference>
+            </param>
+            <param name="metadata_table" displayname="Input Video Metadata Table (MISB metadata for the same video)" type="Required" direction="Input" datatype="Table View" expression="metadata_table">
+                <dialogReference>
+                    <para>Per-second (or similar) telemetry for the same video the frames were exported from - a CSV, Excel worksheet, or geodatabase table. Each frame's elapsed time is converted to an absolute timestamp and matched to the nearest row here. Longitude and latitude columns must be geographic WGS84 degrees. Every other column (altitude, heading, pitch, roll, field of view, near/far distance) is auto-detected by name; only the timestamp column can be designated manually.</para>
+                </dialogReference>
+            </param>
+            <param name="time_field" displayname="Metadata Timestamp Field" type="Optional" direction="Input" datatype="String" expression="{time_field}">
+                <dialogReference>
+                    <para>Column holding each row's absolute timestamp. Leave blank to auto-detect by name, for example 'Precision Time Stamp'. Set it explicitly where the table has more than one time-like column, or where auto-detection reports a miss.</para>
+                </dialogReference>
+            </param>
+            <param name="time_tolerance_seconds" displayname="Match Tolerance (seconds, optional - blank auto-computes from the metadata table's own sampling interval)" type="Optional" direction="Input" datatype="Double" expression="{time_tolerance_seconds}">
+                <dialogReference>
+                    <para>Maximum separation in time between a frame and a metadata row for the pair to be considered a match. Blank uses half the table's median sampling interval, the tightest value that still pairs every frame with its nearest sample. A value of 0 matches nothing: frames land at arbitrary elapsed times while the table is sampled at discrete instants, so an exact match rarely exists. Frames outside the tolerance are retained and flagged unmatched with blank metadata.</para>
+                </dialogReference>
+            </param>
+            <param name="output_name" displayname="Output Table Name" type="Required" direction="Input" datatype="String" expression="output_name">
+                <dialogReference>
+                    <para>Base filename only, not a location. Output tables are always written into the Video Player Frame Export Folder above, beside the images, as '&lt;name&gt;_FrameTable.csv' / '&lt;name&gt;_CameraTable.csv' / '&lt;name&gt;_MatchedMetadataTable.csv'. There is no separate output-location parameter: Extracted Frame Image Metadata Generation and Build Mosaic and Oriented Imagery Datasets discover Frame/Camera Table pairs by scanning that folder, so the tables must be written there.</para>
+                </dialogReference>
+            </param>
+            <param name="output_srs" displayname="Output Coordinate System (for PerspectiveX/Y)" type="Optional" direction="Input" datatype="Coordinate System" expression="{output_srs}">
+                <dialogReference>
+                    <para>Affects only the Frame Table's PerspectiveX/Y columns, which Build Mosaic and Oriented Imagery Datasets uses for placement; it must match that tool's Output Coordinate System if it will be run against this output. It is unrelated to the Video Multiplexer: Platform Longitude/Latitude are passed through from the input metadata table's WGS84 values without reprojection, and per Esri's Video Multiplexer documentation Sensor Latitude/Longitude must always be geographic WGS84 degrees (MISB ST 0601) regardless of this parameter. The Multiplexer's own 'Input Coordinate System' applies only to optional frame-corner ground coordinates supplied separately in its metadata file, not to Sensor Lat/Lon, and Esri's documentation does not require WKID 3857 for that or any other field.</para>
+                </dialogReference>
+            </param>
+            <param name="write_frame_camera_table" displayname="Write Frame/Camera Table (required for Video Frame Image Metadata Fusion / Build Mosaic and Oriented Imagery Datasets)" type="Required" direction="Input" datatype="Boolean" expression="write_frame_camera_table">
+                <dialogReference>
+                    <para>Writes this project's canonical Frame Table and Camera Table CSV pair, the schema the downstream metadata-generation and mosaic/oriented-imagery tools read. Uncheck only for the matched-metadata passthrough below. The Frame Table is also what allows a re-run to skip frames already processed, so with it unchecked every re-run reprocesses the whole folder.</para>
+                </dialogReference>
+            </param>
+            <param name="write_matched_metadata_table" displayname="Write Matched Metadata Table (MISB-compatible passthrough of matched input rows, e.g. to re-feed the Video Multiplexer)" type="Required" direction="Input" datatype="Boolean" expression="write_matched_metadata_table">
+                <dialogReference>
+                    <para>Writes a copy of the matched rows from the input metadata table, unchanged: same columns, same order, one row per matched frame. Intended for feeding another MISB-consuming tool such as the Video Multiplexer. This is a different schema from the Frame/Camera Table above, which serves the imagery pipeline; the two are independent and can both be written in one run.</para>
+                </dialogReference>
+            </param>
+            <param name="camera_id" displayname="Camera ID (fallback if not in the metadata table)" type="Optional" direction="Input" datatype="Long" expression="{camera_id}">
+                <dialogReference>
+                    <para>Identifier written to the Frame Table's CameraID column and used to key the Camera Table. Only used when the metadata table has no camera identifier of its own. One physical camera per run, so a single constant is correct.</para>
+                </dialogReference>
+            </param>
+            <param name="camera_ncols" displayname="Camera Sensor Columns (pixels)" type="Optional" direction="Input" datatype="Long" expression="{camera_ncols}">
+                <dialogReference>
+                    <para>Image width in pixels. Written to the Camera Table; leave blank if unknown.</para>
+                </dialogReference>
+            </param>
+            <param name="camera_nrows" displayname="Camera Sensor Rows (pixels)" type="Optional" direction="Input" datatype="Long" expression="{camera_nrows}">
+                <dialogReference>
+                    <para>Image height in pixels. Written to the Camera Table; leave blank if unknown.</para>
+                </dialogReference>
+            </param>
+            <param name="camera_focal_length" displayname="Camera Focal Length" type="Optional" direction="Input" datatype="Double" expression="{camera_focal_length}">
+                <dialogReference>
+                    <para>Lens focal length in the same units as Camera Pixel Size (Esri's Cameras table schema documents both in microns). Optional - leave blank if unknown.</para>
+                </dialogReference>
+            </param>
+            <param name="camera_pixel_size" displayname="Camera Pixel Size" type="Optional" direction="Input" datatype="Double" expression="{camera_pixel_size}">
+                <dialogReference>
+                    <para>Physical size of one sensor pixel, in the same units as Camera Focal Length. Optional - leave blank if unknown.</para>
+                </dialogReference>
+            </param>
+            <param name="write_aux" displayname="Write *.aux.xml Sidecars" type="Required" direction="Input" datatype="Boolean" expression="write_aux">
+                <dialogReference>
+                    <para>Writes a GDAL/Esri-style '&lt;image&gt;.aux.xml' sidecar beside each matched frame, carrying its matched metadata. Image pixels are never modified, and the format applies to every image type. On by default.</para>
+                </dialogReference>
+            </param>
+            <param name="write_native_metadata" displayname="Embed Native Metadata (EXIF/PNG tEXt)" type="Required" direction="Input" datatype="Boolean" expression="write_native_metadata">
+                <dialogReference>
+                    <para>Writes metadata inside each image file - EXIF tags for JPEG/TIFF, tEXt chunks for PNG - so it travels with the file outside ArcGIS. The image is rewritten in the process; retain an unmodified copy where the originals must be preserved. Requires the Pillow package, which ships with ArcGIS Pro; the step is skipped with a warning if it is absent.</para>
+                </dialogReference>
+            </param>
+            <param name="write_ifdo" displayname="Write iFDO JSON Sidecars" type="Required" direction="Input" datatype="Boolean" expression="write_ifdo">
+                <dialogReference>
+                    <para>Writes image FAIR Digital Object (iFDO) metadata - the marine imaging community standard used by repositories such as BIIGLE - describing each frame's time, position and camera orientation.</para>
+                </dialogReference>
+            </param>
+            <param name="ifdo_template_input" displayname="Import iFDO Template (optional)" type="Optional" direction="Input" datatype="File" expression="{ifdo_template_input}">
+                <dialogReference>
+                    <para>A JSON file of iFDO values saved from a previous run, supplying the facts that cannot be derived from the data itself: platform, sensor, licence, project. One file per deployment can be reused across its dives. An existing '*.ifdo.json' written by an earlier run can be used directly.</para>
+                </dialogReference>
+            </param>
+            <param name="image_set_name" displayname="Image Set Name (optional)" type="Optional" direction="Input" datatype="String" expression="{image_set_name}">
+                <dialogReference>
+                    <para>Name identifying this collection of frames in the iFDO metadata. Defaults to the output table name. A dive or transect identifier is the usual choice.</para>
+                </dialogReference>
+            </param>
+            <param name="out_frame_table" displayname="Output Frame Table" type="Derived" direction="Output" datatype="File" expression="{out_frame_table}" />
+            <param name="out_camera_table" displayname="Output Camera Table" type="Derived" direction="Output" datatype="File" expression="{out_camera_table}" />
+            <param name="out_matched_metadata_table" displayname="Output Matched Metadata Table" type="Derived" direction="Output" datatype="File" expression="{out_matched_metadata_table}" />
+        </parameters>
+        <summary>
+            <para>Builds a Frame Table and Camera Table for frames grabbed one at a time from the ArcGIS Pro video player. Those frames arrive with no table of their own - only a filename ending in the frame's elapsed video time in milliseconds. This tool converts that elapsed time to an absolute timestamp and matches each frame to the nearest row of a video metadata table, producing the same Frame/Camera Table pair that Extract Video Frames To Images produces automatically.</para>
+            <para>The result is a drop-in input for Extracted Frame Image Metadata Generation and Build Mosaic and Oriented Imagery Datasets, placing manually grabbed frames in the same workflow as automatically extracted ones. Frames with no match inside the tolerance are retained and flagged rather than dropped. Sidecar metadata can also be written directly, and a re-run processes only newly added frames.</para>
+        </summary>
+    </tool>
+    <dataIdInfo>
+        <idCitation>
+            <resTitle>Cross-Reference Video Player Frame Exports</resTitle>
+        </idCitation>
+    </dataIdInfo>
+</metadata>

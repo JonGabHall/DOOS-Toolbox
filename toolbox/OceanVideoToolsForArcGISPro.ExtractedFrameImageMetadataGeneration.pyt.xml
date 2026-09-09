@@ -1,2 +1,336 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<metadata xml:lang="en"><Esri><CreaDate>20260826</CreaDate><CreaTime>18011800</CreaTime><ArcGISFormat>1.0</ArcGISFormat><SyncOnce>TRUE</SyncOnce></Esri></metadata>
+<metadata xml:lang="en">
+    <Esri>
+        <CreaDate>20260826</CreaDate>
+        <CreaTime>18011800</CreaTime>
+        <ArcGISFormat>1.0</ArcGISFormat>
+        <SyncOnce>TRUE</SyncOnce>
+    </Esri>
+    <tool name="ExtractedFrameImageMetadataGeneration" displayname="Extracted Frame Image Metadata Generation" toolboxalias="OceanVideoTools" xmlns="">
+        <parameters>
+            <param name="export_folder" displayname="Input video frame folder with Frame &amp; Camera tables" type="Required" direction="Input" datatype="Folder" expression="export_folder">
+                <dialogReference>
+                    <para>Folder holding the extracted frame images together with their Frame Table and Camera Table CSVs - the output of Esri's Extract Video Frames To Images, or of Cross-Reference Video Player Frame Exports. The tables are located by their '*_FrameTable.csv' / '*_CameraTable.csv' names, which must be preserved. Both a flat folder and an already-exported images/ + metadata/ layout are accepted. Multiple Frame Tables in the same folder are supported and each is processed in turn.</para>
+                </dialogReference>
+            </param>
+            <param name="rename_images_base_name" displayname="Rename Image Frames (new base name, optional)" type="Optional" direction="Input" datatype="String" expression="{rename_images_base_name}">
+                <dialogReference>
+                    <para>Renames every frame image in the input folder to this new base name, before any other processing below runs. The trailing '_&lt;digits&gt;' sequence each frame already carries (its sequential index or elapsed-time suffix, e.g. '_0000000') and its file extension are always preserved - only the text before that suffix is replaced. Example: 'Squid_0000000.tif' with a new base name of 'ROV1' becomes 'ROV1_0000000.tif'. The Frame Table's image-path column, and every table/sidecar/BIIGLE CSV/manifest this tool generates afterward (including when written into this same input folder), automatically reflect the new names - no further action is needed. Leave blank to keep the existing file names unchanged.</para>
+                </dialogReference>
+            </param>
+            <param name="export_json_manifest" displayname="Export JSON Manifest (records source images and run settings)" type="Optional" direction="Input" datatype="Boolean" expression="{export_json_manifest}">
+                <dialogReference>
+                    <para>Writes a SourceManifest.json listing every image with the absolute path it came from, plus the settings used by the run. It records provenance for a deliverable folder that has been copied away from the source data.</para>
+                </dialogReference>
+            </param>
+            <param name="export_biigle_metadata" displayname="Export BIIGLE File Metadata CSV (biigle.de volume metadata upload)" type="Optional" direction="Input" datatype="Boolean" expression="{export_biigle_metadata}">
+                <dialogReference>
+                    <para>Writes one BiigleMetadata.csv covering every processed image, in the column format BIIGLE's volume file-metadata upload expects (biigle.de/manual/tutorials/volumes/file-metadata): filename (mandatory), taken_at, lng, lat, gps_altitude, distance_to_ground, area, SUB_heading. filename/taken_at/lng/lat/gps_altitude/SUB_heading are filled in automatically from the same resolved iFDO fields (image-datetime/image-latitude/image-longitude/image-altitude-meters/image-camera-yaw-degrees) already used elsewhere in this tool. distance_to_ground and area have no equivalent elsewhere in this project - they are auto-detected from a matching Frame Table column if one exists, otherwise left blank unless a constant override below is provided.</para>
+                </dialogReference>
+            </param>
+            <param name="biigle_distance_to_ground_override" displayname="BIIGLE distance_to_ground override (meters, applied to every image)" type="Optional" direction="Input" datatype="Double" expression="{biigle_distance_to_ground_override}">
+                <dialogReference>
+                    <para>Single camera-to-seafloor distance in meters, written to every image's BIIGLE row. Used only when no matching Frame Table column is found. Applicable where the vehicle held a roughly constant altitude; BIIGLE uses it to scale annotations.</para>
+                </dialogReference>
+            </param>
+            <param name="biigle_area_override" displayname="BIIGLE area override (square meters, applied to every image)" type="Optional" direction="Input" datatype="Double" expression="{biigle_area_override}">
+                <dialogReference>
+                    <para>Single ground area covered by one frame, in square meters, written to every image's BIIGLE row. Only used when no matching Frame Table column is found.</para>
+                </dialogReference>
+            </param>
+            <param name="export_ifdo_json" displayname="Export iFDO JSON" type="Optional" direction="Input" datatype="Boolean" expression="{export_ifdo_json}">
+                <dialogReference>
+                    <para>Writes image FAIR Digital Object (iFDO) metadata - the marine imaging community standard used by repositories such as BIIGLE and PANGAEA. This is the sole on/off switch for iFDO output; enabling it reveals the iFDO Output Options and iFDO Metadata Categories sections below, which hold the deployment facts that cannot be derived from the imagery.</para>
+                </dialogReference>
+            </param>
+            <param name="metadata_sidecar_formats" displayname="Write Metadata Sidecar File(s)" type="Optional" direction="Input" datatype="String" expression="{metadata_sidecar_formats}">
+                <dialogReference>
+                    <para>Writes metadata to files beside each image, leaving the image itself unmodified. '*.aux.xml' is the GDAL/Esri format ArcGIS reads. '*.xmp' is the Adobe sidecar format read by Lightroom, Bridge and Photoshop; it is additive rather than a replacement, as ArcGIS Pro is not confirmed to read it. Select both, either, or neither.</para>
+                </dialogReference>
+            </param>
+            <param name="write_native_metadata" displayname="Embed metadata directly into image files (EXIF for JPEG/TIFF, tEXt for PNG)" type="Required" direction="Input" datatype="Boolean" expression="write_native_metadata">
+                <dialogReference>
+                    <para>Writes the same values already carried in the *.aux.xml/*.xmp sidecars directly into the image file itself, as a single JSON blob (EXIF UserComment for JPEG/TIFF, a 'FrameCameraMetadata' tEXt chunk for PNG), plus a handful of standard tags readers outside this project's own tools recognize:&lt;br/&gt;&lt;br/&gt;&amp;#8226; Every raw Frame Table column (Frame_*) and, when a Camera Table pairs with it, every Camera Table column (Camera_*)&lt;br/&gt;&amp;#8226; Every resolved iFDO field (image-latitude/longitude/altitude, image-datetime, image-uuid, image-camera-yaw/pitch/roll-degrees, plus any manually-entered or template-imported iFDO Metadata Category fields such as image-license/image-platform/image-deployment)&lt;br/&gt;&amp;#8226; Standard ImageDescription/DateTime tags and GPS latitude/longitude/altitude (EXIF GPS IFD for JPEG/TIFF; plain-text GPS tEXt fields for PNG)</para>
+                </dialogReference>
+            </param>
+            <param name="ifdo_template_input" displayname="Import iFDO Metadata Template from Previous Run (optional)" type="Optional" direction="Input" datatype="File" expression="{ifdo_template_input}">
+                <dialogReference>
+                    <para>A JSON file of iFDO values saved by a previous run's 'Export iFDO Metadata Template' option, supplying the deployment facts that cannot be derived from the imagery - platform, sensor, licence, project, principal investigator. One file per deployment can be reused across its dives. A '*.ifdo.json' written by an earlier run also works directly; set-identity values (the set's own UUID and name) are never carried over.</para>
+                </dialogReference>
+            </param>
+            <param name="generate_in_input_folder" displayname="Generate metadata output files within the Input Folder" type="Required" direction="Input" datatype="Boolean" expression="generate_in_input_folder">
+                <dialogReference>
+                    <para>When checked, all metadata output is written directly into the input video frame folder and 'Export to Output Folder' below is disabled. Leave unchecked to keep using 'Export to Output Folder' (or leave that blank to still write into the input folder).</para>
+                </dialogReference>
+            </param>
+            <param name="export_output_folder" displayname="Export to Output Folder (optional - creates complete deliverable)" type="Optional" direction="Input" datatype="Folder" expression="{export_output_folder}">
+                <dialogReference>
+                    <para>Copies the images, their sidecars and the Frame/Camera Tables into a new folder arranged as images/ + metadata/ with the tables at the root - a self-contained deliverable that can be handed off without the original working folder. World files travel with their images, and the copied Frame Table's image paths are rewritten to point at the copies. Leave blank to write metadata in place.</para>
+                </dialogReference>
+            </param>
+            <param name="if_output_exists" displayname="If Output Folder Exists" type="Optional" direction="Input" datatype="String" expression="{if_output_exists}">
+                <dialogReference>
+                    <para>What to do when the export folder already exists: overwrite its contents, skip the export and keep what is there, or stop with an error. Enabled only when an Export to Output Folder is set.</para>
+                </dialogReference>
+            </param>
+            <param name="export_ifdo_template" displayname="Export iFDO Metadata Template for Future Runs" type="Optional" direction="Input" datatype="Boolean" expression="{export_ifdo_template}">
+                <dialogReference>
+                    <para>Saves the iFDO values used by this run to a JSON file for import into later runs, so the iFDO Metadata Categories are entered once and reused across the rest of the deployment.</para>
+                </dialogReference>
+            </param>
+            <param name="ifdo_template_output" displayname="iFDO Template Output File (.json)" type="Optional" direction="Output" datatype="File" expression="{ifdo_template_output}">
+                <dialogReference>
+                    <para>Where to save the iFDO template JSON. Enabled only when Export iFDO Metadata Template is checked.</para>
+                </dialogReference>
+            </param>
+            <param name="ifdo_output_format" displayname="iFDO Output Format (default: single image-set JSON file)" type="Optional" direction="Input" datatype="String" expression="{ifdo_output_format}">
+                <dialogReference>
+                    <para>Single image-set JSON file (default, and the iFDO standard's own layout): one '&amp;lt;Image Set Name&amp;gt;.ifdo.json' describing every image, written to the root of the output folder beside the Frame/Camera Tables and BiigleMetadata.csv. Per-image JSON sidecars: one '&amp;lt;image&amp;gt;.ifdo.json' next to each image instead.</para>
+                </dialogReference>
+            </param>
+            <param name="image_set_name" displayname="Image Set Name override" type="Optional" direction="Input" datatype="String" expression="{image_set_name}">
+                <dialogReference>
+                    <para>Name identifying this collection of images in the iFDO metadata, and the file name used for the single image-set JSON document. Defaults to the ArcGIS Pro project title if one is set, otherwise the Frame Table's own name. A dive or transect identifier is the usual choice.</para>
+                </dialogReference>
+            </param>
+            <param name="include_context" displayname="Include Project Context" type="Optional" direction="Input" datatype="Boolean" expression="{include_context}">
+                <dialogReference>
+                    <para>Reveals this group of iFDO fields for editing. They record decisions made once per deployment and cannot be derived from the imagery or from ArcGIS, so they stay hidden until enabled. Fields left blank are omitted from the iFDO document.</para>
+                </dialogReference>
+            </param>
+            <param name="include_deployment" displayname="Include Deployment Information" type="Optional" direction="Input" datatype="Boolean" expression="{include_deployment}">
+                <dialogReference>
+                    <para>Reveals this group of iFDO fields for editing. They record decisions made once per deployment and cannot be derived from the imagery or from ArcGIS, so they stay hidden until enabled. Fields left blank are omitted from the iFDO document.</para>
+                </dialogReference>
+            </param>
+            <param name="include_sensor" displayname="Include Sensor / Camera Information" type="Optional" direction="Input" datatype="Boolean" expression="{include_sensor}">
+                <dialogReference>
+                    <para>Reveals this group of iFDO fields for editing. They record decisions made once per deployment and cannot be derived from the imagery or from ArcGIS, so they stay hidden until enabled. Fields left blank are omitted from the iFDO document.</para>
+                </dialogReference>
+            </param>
+            <param name="include_licensing" displayname="Include Licensing, Credit &amp; Identifiers" type="Optional" direction="Input" datatype="Boolean" expression="{include_licensing}">
+                <dialogReference>
+                    <para>Reveals this group of iFDO fields for editing. They record decisions made once per deployment and cannot be derived from the imagery or from ArcGIS, so they stay hidden until enabled. Fields left blank are omitted from the iFDO document.</para>
+                </dialogReference>
+            </param>
+            <param name="include_study" displayname="Include Study Design &amp; Classification" type="Optional" direction="Input" datatype="Boolean" expression="{include_study}">
+                <dialogReference>
+                    <para>Reveals this group of iFDO fields for editing. They record decisions made once per deployment and cannot be derived from the imagery or from ArcGIS, so they stay hidden until enabled. Fields left blank are omitted from the iFDO document.</para>
+                </dialogReference>
+            </param>
+            <param name="include_curation" displayname="Include Curation &amp; Quality" type="Optional" direction="Input" datatype="Boolean" expression="{include_curation}">
+                <dialogReference>
+                    <para>Reveals this group of iFDO fields for editing. They record decisions made once per deployment and cannot be derived from the imagery or from ArcGIS, so they stay hidden until enabled. Fields left blank are omitted from the iFDO document.</para>
+                </dialogReference>
+            </param>
+            <param name="image_context" displayname="image-context (overarching programme)" type="Optional" direction="Input" datatype="String" expression="{image_context}">
+                <dialogReference>
+                    <para>image-context - the NAME of the image-context. iFDO stores this as an object; use the matching 'uri' parameter to add a resolvable link.</para>
+                </dialogReference>
+            </param>
+            <param name="image_context_uri" displayname="image-context - uri (optional)" type="Optional" direction="Input" datatype="String" expression="{image_context_uri}">
+                <dialogReference>
+                    <para>Optional URI pointing to details of this image-context (equipment page, cruise report, ORCID, licence deed, ...).</para>
+                </dialogReference>
+            </param>
+            <param name="image_project" displayname="image-project (cruise / expedition)" type="Optional" direction="Input" datatype="String" expression="{image_project}">
+                <dialogReference>
+                    <para>image-project - the NAME of the image-project. iFDO stores this as an object; use the matching 'uri' parameter to add a resolvable link.</para>
+                </dialogReference>
+            </param>
+            <param name="image_project_uri" displayname="image-project - uri (optional)" type="Optional" direction="Input" datatype="String" expression="{image_project_uri}">
+                <dialogReference>
+                    <para>Optional URI pointing to details of this image-project (equipment page, cruise report, ORCID, licence deed, ...).</para>
+                </dialogReference>
+            </param>
+            <param name="image_event" displayname="image-event (dive / station / deployment)" type="Optional" direction="Input" datatype="String" expression="{image_event}">
+                <dialogReference>
+                    <para>image-event - the NAME of the image-event. iFDO stores this as an object; use the matching 'uri' parameter to add a resolvable link.</para>
+                </dialogReference>
+            </param>
+            <param name="image_event_uri" displayname="image-event - uri (optional)" type="Optional" direction="Input" datatype="String" expression="{image_event_uri}">
+                <dialogReference>
+                    <para>Optional URI pointing to details of this image-event (equipment page, cruise report, ORCID, licence deed, ...).</para>
+                </dialogReference>
+            </param>
+            <param name="image_deployment" displayname="image-deployment" type="Optional" direction="Input" datatype="String" expression="{image_deployment}">
+                <dialogReference>
+                    <para>image-deployment - iFDO defines a fixed set of allowed values for this field. Values from an imported template are used when this is left blank.</para>
+                </dialogReference>
+            </param>
+            <param name="image_navigation" displayname="image-navigation" type="Optional" direction="Input" datatype="String" expression="{image_navigation}">
+                <dialogReference>
+                    <para>image-navigation - iFDO defines a fixed set of allowed values for this field. Values from an imported template are used when this is left blank.</para>
+                </dialogReference>
+            </param>
+            <param name="image_illumination" displayname="image-illumination" type="Optional" direction="Input" datatype="String" expression="{image_illumination}">
+                <dialogReference>
+                    <para>image-illumination - iFDO defines a fixed set of allowed values for this field. Values from an imported template are used when this is left blank.</para>
+                </dialogReference>
+            </param>
+            <param name="image_scale_reference" displayname="image-scale-reference" type="Optional" direction="Input" datatype="String" expression="{image_scale_reference}">
+                <dialogReference>
+                    <para>image-scale-reference - iFDO defines a fixed set of allowed values for this field. Values from an imported template are used when this is left blank.</para>
+                </dialogReference>
+            </param>
+            <param name="image_fauna_attraction" displayname="image-fauna-attraction" type="Optional" direction="Input" datatype="String" expression="{image_fauna_attraction}">
+                <dialogReference>
+                    <para>image-fauna-attraction - iFDO defines a fixed set of allowed values for this field. Values from an imported template are used when this is left blank.</para>
+                </dialogReference>
+            </param>
+            <param name="image_capture_mode" displayname="image-capture-mode" type="Optional" direction="Input" datatype="String" expression="{image_capture_mode}">
+                <dialogReference>
+                    <para>image-capture-mode - iFDO defines a fixed set of allowed values for this field. Values from an imported template are used when this is left blank.</para>
+                </dialogReference>
+            </param>
+            <param name="image_platform" displayname="image-platform (vehicle / ROV)" type="Optional" direction="Input" datatype="String" expression="{image_platform}">
+                <dialogReference>
+                    <para>image-platform - the NAME of the image-platform. iFDO stores this as an object; use the matching 'uri' parameter to add a resolvable link.</para>
+                </dialogReference>
+            </param>
+            <param name="image_platform_uri" displayname="image-platform - uri (optional)" type="Optional" direction="Input" datatype="String" expression="{image_platform_uri}">
+                <dialogReference>
+                    <para>Optional URI pointing to details of this image-platform (equipment page, cruise report, ORCID, licence deed, ...).</para>
+                </dialogReference>
+            </param>
+            <param name="image_sensor" displayname="image-sensor (camera system)" type="Optional" direction="Input" datatype="String" expression="{image_sensor}">
+                <dialogReference>
+                    <para>image-sensor - the NAME of the image-sensor. iFDO stores this as an object; use the matching 'uri' parameter to add a resolvable link.</para>
+                </dialogReference>
+            </param>
+            <param name="image_sensor_uri" displayname="image-sensor - uri (optional)" type="Optional" direction="Input" datatype="String" expression="{image_sensor_uri}">
+                <dialogReference>
+                    <para>Optional URI pointing to details of this image-sensor (equipment page, cruise report, ORCID, licence deed, ...).</para>
+                </dialogReference>
+            </param>
+            <param name="image_acquisition" displayname="image-acquisition" type="Optional" direction="Input" datatype="String" expression="{image_acquisition}">
+                <dialogReference>
+                    <para>image-acquisition - iFDO defines a fixed set of allowed values for this field. Values from an imported template are used when this is left blank.</para>
+                </dialogReference>
+            </param>
+            <param name="image_quality" displayname="image-quality" type="Optional" direction="Input" datatype="String" expression="{image_quality}">
+                <dialogReference>
+                    <para>image-quality - iFDO defines a fixed set of allowed values for this field. Values from an imported template are used when this is left blank.</para>
+                </dialogReference>
+            </param>
+            <param name="image_spectral_resolution" displayname="image-spectral-resolution" type="Optional" direction="Input" datatype="String" expression="{image_spectral_resolution}">
+                <dialogReference>
+                    <para>image-spectral-resolution - iFDO defines a fixed set of allowed values for this field. Values from an imported template are used when this is left blank.</para>
+                </dialogReference>
+            </param>
+            <param name="image_pixel_magnitude" displayname="image-pixel-magnitude (size of one pixel)" type="Optional" direction="Input" datatype="String" expression="{image_pixel_magnitude}">
+                <dialogReference>
+                    <para>image-pixel-magnitude - iFDO defines a fixed set of allowed values for this field. Values from an imported template are used when this is left blank.</para>
+                </dialogReference>
+            </param>
+            <param name="image_license" displayname="image-license (e.g. CC-BY, CC-0)" type="Optional" direction="Input" datatype="String" expression="{image_license}">
+                <dialogReference>
+                    <para>image-license - the NAME of the image-license. iFDO stores this as an object; use the matching 'uri' parameter to add a resolvable link.</para>
+                </dialogReference>
+            </param>
+            <param name="image_license_uri" displayname="image-license - uri (optional)" type="Optional" direction="Input" datatype="String" expression="{image_license_uri}">
+                <dialogReference>
+                    <para>Optional URI pointing to details of this image-license (equipment page, cruise report, ORCID, licence deed, ...).</para>
+                </dialogReference>
+            </param>
+            <param name="image_set_handle" displayname="image-set-handle (Handle URL or DOI)" type="Optional" direction="Input" datatype="String" expression="{image_set_handle}">
+                <dialogReference>
+                    <para>image-set-handle - populated from an imported template if available; manual entry overrides the template value.</para>
+                </dialogReference>
+            </param>
+            <param name="image_copyright" displayname="image-copyright (statement or contact)" type="Optional" direction="Input" datatype="String" expression="{image_copyright}">
+                <dialogReference>
+                    <para>image-copyright - populated from an imported template if available; manual entry overrides the template value.</para>
+                </dialogReference>
+            </param>
+            <param name="image_pi" displayname="image-pi (principal investigator)" type="Optional" direction="Input" datatype="String" expression="{image_pi}">
+                <dialogReference>
+                    <para>image-pi - the NAME of the image-pi. iFDO stores this as an object; use the matching 'uri' parameter to add a resolvable link.</para>
+                </dialogReference>
+            </param>
+            <param name="image_pi_uri" displayname="image-pi - uri (optional)" type="Optional" direction="Input" datatype="String" expression="{image_pi_uri}">
+                <dialogReference>
+                    <para>Optional URI pointing to details of this image-pi (equipment page, cruise report, ORCID, licence deed, ...).</para>
+                </dialogReference>
+            </param>
+            <param name="image_creators" displayname="image-creators (names, separated by ';')" type="Optional" direction="Input" datatype="String" expression="{image_creators}">
+                <dialogReference>
+                    <para>image-creators - one or more names separated by ';'. Overrides the creators detected from the signed-in ArcGIS portal account.</para>
+                </dialogReference>
+            </param>
+            <param name="image_objective" displayname="image-objective (aims of the study)" type="Optional" direction="Input" datatype="String" expression="{image_objective}">
+                <dialogReference>
+                    <para>image-objective - populated from an imported template if available; manual entry overrides the template value.</para>
+                </dialogReference>
+            </param>
+            <param name="image_target_environment" displayname="image-target-environment" type="Optional" direction="Input" datatype="String" expression="{image_target_environment}">
+                <dialogReference>
+                    <para>image-target-environment - populated from an imported template if available; manual entry overrides the template value.</para>
+                </dialogReference>
+            </param>
+            <param name="image_marine_zone" displayname="image-marine-zone" type="Optional" direction="Input" datatype="String" expression="{image_marine_zone}">
+                <dialogReference>
+                    <para>image-marine-zone - iFDO defines a fixed set of allowed values for this field. Values from an imported template are used when this is left blank.</para>
+                </dialogReference>
+            </param>
+            <param name="image_target_timescale" displayname="image-target-timescale" type="Optional" direction="Input" datatype="String" expression="{image_target_timescale}">
+                <dialogReference>
+                    <para>image-target-timescale - populated from an imported template if available; manual entry overrides the template value.</para>
+                </dialogReference>
+            </param>
+            <param name="image_spatial_constraints" displayname="image-spatial-constraints" type="Optional" direction="Input" datatype="String" expression="{image_spatial_constraints}">
+                <dialogReference>
+                    <para>image-spatial-constraints - populated from an imported template if available; manual entry overrides the template value.</para>
+                </dialogReference>
+            </param>
+            <param name="image_temporal_constraints" displayname="image-temporal-constraints" type="Optional" direction="Input" datatype="String" expression="{image_temporal_constraints}">
+                <dialogReference>
+                    <para>image-temporal-constraints - populated from an imported template if available; manual entry overrides the template value.</para>
+                </dialogReference>
+            </param>
+            <param name="image_abstract" displayname="image-abstract (500-2000 characters)" type="Optional" direction="Input" datatype="String" expression="{image_abstract}">
+                <dialogReference>
+                    <para>image-abstract - populated from an imported template if available; manual entry overrides the template value.</para>
+                </dialogReference>
+            </param>
+            <param name="image_time_synchronisation" displayname="image-time-synchronisation" type="Optional" direction="Input" datatype="String" expression="{image_time_synchronisation}">
+                <dialogReference>
+                    <para>image-time-synchronisation - populated from an imported template if available; manual entry overrides the template value.</para>
+                </dialogReference>
+            </param>
+            <param name="image_item_identification_scheme" displayname="image-item-identification-scheme (how filenames are built)" type="Optional" direction="Input" datatype="String" expression="{image_item_identification_scheme}">
+                <dialogReference>
+                    <para>image-item-identification-scheme - populated from an imported template if available; manual entry overrides the template value.</para>
+                </dialogReference>
+            </param>
+            <param name="image_curation_protocol" displayname="image-curation-protocol" type="Optional" direction="Input" datatype="String" expression="{image_curation_protocol}">
+                <dialogReference>
+                    <para>image-curation-protocol - populated from an imported template if available; manual entry overrides the template value.</para>
+                </dialogReference>
+            </param>
+            <param name="image_visual_constraints" displayname="image-visual-constraints (turbidity, blocked view, ...)" type="Optional" direction="Input" datatype="String" expression="{image_visual_constraints}">
+                <dialogReference>
+                    <para>image-visual-constraints - populated from an imported template if available; manual entry overrides the template value.</para>
+                </dialogReference>
+            </param>
+            <param name="image_coordinate_uncertainty_meters" displayname="image-coordinate-uncertainty-meters" type="Optional" direction="Input" datatype="Double" expression="{image_coordinate_uncertainty_meters}">
+                <dialogReference>
+                    <para>image-coordinate-uncertainty-meters - populated from an imported template if available; manual entry overrides the template value.</para>
+                </dialogReference>
+            </param>
+            <param name="out_folder" displayname="Output Folder (where metadata was written)" type="Derived" direction="Output" datatype="Folder" expression="{out_folder}" />
+            <param name="out_json_manifest" displayname="JSON Manifest File" type="Derived" direction="Output" datatype="File" expression="{out_json_manifest}" />
+            <param name="out_biigle_metadata" displayname="BIIGLE File Metadata CSV" type="Derived" direction="Output" datatype="File" expression="{out_biigle_metadata}" />
+            <param name="out_ifdo_json" displayname="iFDO JSON File (single image-set document)" type="Derived" direction="Output" datatype="File" expression="{out_ifdo_json}" />
+        </parameters>
+        <summary>
+            <para>Writes the per-frame metadata held in a Frame Table and Camera Table into the frame images themselves and into standard sidecar files beside them, so each image carries its own time, position and camera information independently of the tables. Input is a folder of extracted frames plus the Frame/Camera Table CSV pair produced by Esri's Extract Video Frames To Images or by Cross-Reference Video Player Frame Exports.</para>
+            <para>Outputs, each optional: GDAL PAM sidecars (*.aux.xml, the format ArcGIS reads); Adobe XMP sidecars (*.xmp, read by Lightroom/Bridge/Photoshop); metadata embedded inside the image file itself (EXIF tags for JPEG and TIFF, tEXt chunks for PNG); image FAIR Digital Object metadata (iFDO v2.2.1 JSON, the marine imaging community standard); a BIIGLE file-metadata CSV for upload to the BIIGLE annotation platform; and a JSON manifest recording the source of every image and the settings that produced it. The run can also copy its outputs into a self-contained deliverable folder and save the entered metadata as a reusable template.</para>
+        </summary>
+    </tool>
+    <dataIdInfo>
+        <idCitation>
+            <resTitle>Extracted Frame Image Metadata Generation</resTitle>
+        </idCitation>
+    </dataIdInfo>
+</metadata>

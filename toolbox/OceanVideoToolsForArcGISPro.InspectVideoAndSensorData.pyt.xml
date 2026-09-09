@@ -1,2 +1,96 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<metadata xml:lang="en"><Esri><CreaDate>20260904</CreaDate><CreaTime>10554500</CreaTime><ArcGISFormat>1.0</ArcGISFormat><SyncOnce>TRUE</SyncOnce></Esri></metadata>
+<metadata xml:lang="en">
+    <Esri>
+        <CreaDate>20260904</CreaDate>
+        <CreaTime>10554500</CreaTime>
+        <ArcGISFormat>1.0</ArcGISFormat>
+        <SyncOnce>TRUE</SyncOnce>
+    </Esri>
+    <tool name="InspectVideoAndSensorData" displayname="Inspect Video and Sensor Data" toolboxalias="OceanVideoTools" xmlns="">
+        <parameters>
+            <param name="input_video" displayname="Input Video File" type="Optional" direction="Input" datatype="File" expression="{input_video}">
+                <dialogReference>
+                    <para>Optional where a Sensor Data Table is supplied instead; at least one of the two inputs is required. Supplying only a table runs this tool as a table statistics/gap-inspection utility, against a CSV, Excel worksheet, or file geodatabase table given in the Sensor Data Table parameter below.</para>
+                </dialogReference>
+            </param>
+            <param name="sensor_table" displayname="Input Sensor Data Table (raw telemetry or video metadata, optional)" type="Optional" direction="Input" datatype="Table View" expression="{sensor_table}">
+                <dialogReference>
+                    <para>Optional where an Input Video File is supplied instead; at least one of the two inputs is required. Can be supplied alone, with no video, to inspect a table's timestamp-interval statistics and gaps.</para>
+                </dialogReference>
+            </param>
+            <param name="secondary_sensor_table" displayname="Secondary Sensor Table (joined to the Sensor Data Table on timestamp)" type="Optional" direction="Input" datatype="Table View" expression="{secondary_sensor_table}">
+                <dialogReference>
+                    <para>Optional second table, for example a CTD or chemistry log, whose columns are joined onto the Sensor Data Table by nearest timestamp when Build Combined Variable Table is checked. Rows with no match inside the join tolerance retain blank values rather than being dropped. A column name already present in the Sensor Data Table is suffixed (_2) rather than overwritten.</para>
+                </dialogReference>
+            </param>
+            <param name="build_variable_table" displayname="Build Combined Variable Table" type="Optional" direction="Input" datatype="Boolean" expression="{build_variable_table}">
+                <dialogReference>
+                    <para>Writes the Sensor Data Table, optionally joined with the Secondary Sensor Table, into a single geodatabase table, so one table holds both the video metadata and the sensor metadata for a deployment. Not required where a single table already holds both.</para>
+                </dialogReference>
+            </param>
+            <param name="variable_table_workspace" displayname="Variable Table Geodatabase" type="Optional" direction="Input" datatype="Workspace" expression="{variable_table_workspace}">
+                <dialogReference>
+                    <para>File geodatabase the combined variable table is written into. Required when Build Combined Variable Table is checked.</para>
+                </dialogReference>
+            </param>
+            <param name="variable_table_name" displayname="Variable Table Name" type="Optional" direction="Input" datatype="String" expression="{variable_table_name}">
+                <dialogReference>
+                    <para>Name of the combined variable table inside the geodatabase above. Defaults to '&lt;Output Description Report Name&gt;_VariableTable'. An existing table of the same name is overwritten.</para>
+                </dialogReference>
+            </param>
+            <param name="join_tolerance_seconds" displayname="Join Tolerance (seconds, blank = auto)" type="Optional" direction="Input" datatype="Double" expression="{join_tolerance_seconds}">
+                <dialogReference>
+                    <para>Maximum timestamp difference for a Secondary Sensor Table row to be joined onto a Sensor Data Table row. Blank computes half the secondary table's median sampling interval, the tightest tolerance that still pairs every row with its nearest sample.</para>
+                </dialogReference>
+            </param>
+            <param name="video_start_time_override" displayname="Video Start Time Override (ISO 8601 UTC, if the video's own creation_time tag is missing or wrong)" type="Optional" direction="Input" datatype="String" expression="{video_start_time_override}">
+                <dialogReference>
+                    <para>Absolute UTC start time of the video, for example '2024-06-01T14:30:00Z'. Required only where the video carries neither embedded MISB KLV metadata nor a container 'creation_time' tag; without one of the three the report cannot place the video on an absolute timeline and overlap with the sensor table cannot be checked. Resolution order is: this override, then embedded KLV, then the container tag, then the sensor table's earliest timestamp.</para>
+                </dialogReference>
+            </param>
+            <param name="output_folder" displayname="Output Folder" type="Required" direction="Input" datatype="Folder" expression="output_folder">
+                <dialogReference>
+                    <para>Folder the description report is written into. Both the plain-text and JSON versions of the report are written here, plus the embedded-telemetry CSV if that option is checked.</para>
+                </dialogReference>
+            </param>
+            <param name="output_name" displayname="Output Description Report Name" type="Required" direction="Input" datatype="String" expression="output_name">
+                <dialogReference>
+                    <para>Base name for the outputs, without an extension - the tool appends '_DescriptionReport.txt' and '_DescriptionReport.json'. Defaults to the input video's file name, or the sensor table's name when no video is supplied. An existing report of the same name is overwritten.</para>
+                </dialogReference>
+            </param>
+            <param name="break_threshold_multiplier" displayname="Break Sensitivity (multiple of the expected frame interval)" type="Optional" direction="Input" datatype="Double" expression="{break_threshold_multiplier}">
+                <dialogReference>
+                    <para>A gap between consecutive video frame timestamps larger than this many times the expected 1/frame-rate interval is reported as a 'break' (dropped frame/encoding discontinuity). Lower = more sensitive (more breaks reported); higher = only larger gaps are flagged.</para>
+                </dialogReference>
+            </param>
+            <param name="sensor_gap_threshold_multiplier" displayname="Sensor Gap Sensitivity (multiple of the median sampling interval)" type="Optional" direction="Input" datatype="Double" expression="{sensor_gap_threshold_multiplier}">
+                <dialogReference>
+                    <para>A gap between consecutive sensor table timestamps larger than this many times the table's own median sampling interval is reported as a 'gap'. Lower = more sensitive (more gaps reported); higher = only larger gaps are flagged. Ignored if Sensor Gap Threshold Override (seconds) below is set.</para>
+                </dialogReference>
+            </param>
+            <param name="sensor_gap_threshold_seconds" displayname="Sensor Gap Threshold Override (seconds, optional)" type="Optional" direction="Input" datatype="Double" expression="{sensor_gap_threshold_seconds}">
+                <dialogReference>
+                    <para>When set, a gap between consecutive sensor table timestamps larger than this fixed number of seconds is reported as a 'gap', overriding Sensor Gap Sensitivity above. Applicable where the table's sampling rate is too irregular for a median-based threshold to be meaningful.</para>
+                </dialogReference>
+            </param>
+            <param name="export_embedded_telemetry_csv" displayname="Export Embedded KLV Telemetry as CSV (if present)" type="Required" direction="Input" datatype="Boolean" expression="export_embedded_telemetry_csv">
+                <dialogReference>
+                    <para>Where the video carries embedded MISB ST 0601 KLV metadata, writes it out as a CSV: one row per packet, holding the timestamp plus whichever of Platform Heading/Pitch/Roll Angle and Sensor Latitude/Longitude/True Altitude are present. This recovers telemetry from a multiplexed video where the original navigation log is unavailable, and produces an ordinary sensor table that can be inspected, mapped, or passed to any tool in this toolbox that accepts one.</para>
+                </dialogReference>
+            </param>
+            <param name="out_description_report_txt" displayname="Output Description Report (Text)" type="Derived" direction="Output" datatype="File" expression="{out_description_report_txt}" />
+            <param name="out_description_report_json" displayname="Output Description Report (JSON)" type="Derived" direction="Output" datatype="File" expression="{out_description_report_json}" />
+            <param name="out_embedded_telemetry_csv" displayname="Output Embedded KLV Telemetry CSV" type="Derived" direction="Output" datatype="File" expression="{out_embedded_telemetry_csv}" />
+            <param name="out_variable_table" displayname="Output Combined Variable Table" type="Derived" direction="Output" datatype="Table" expression="{out_variable_table}" />
+        </parameters>
+        <summary>
+            <para>Probes an input video and/or a sensor data table (CSV, Excel worksheet, or geodatabase table - at least one is required, either works alone) and writes a plain-text + JSON report: detected UTC time extent, frame rate, resolution, internal discontinuities ('breaks'), sensor sampling interval statistics, and whether the sensor table's time range actually overlaps the video's. Run it before extracting frames to confirm the two inputs line up in time, or standalone against a table alone for its interval and value statistics.</para>
+            <para>Reading a video requires the 'av' (PyAV) package installed in a cloned ArcGIS Pro Python environment. The table-only path requires nothing beyond a default ArcGIS Pro installation.</para>
+        </summary>
+    </tool>
+    <dataIdInfo>
+        <idCitation>
+            <resTitle>Inspect Video and Sensor Data</resTitle>
+        </idCitation>
+    </dataIdInfo>
+</metadata>

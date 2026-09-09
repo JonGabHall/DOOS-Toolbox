@@ -1,2 +1,135 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<metadata xml:lang="en"><Esri><CreaDate>20260828</CreaDate><CreaTime>12391900</CreaTime><ArcGISFormat>1.0</ArcGISFormat><SyncOnce>TRUE</SyncOnce></Esri></metadata>
+<metadata xml:lang="en">
+    <Esri>
+        <CreaDate>20260828</CreaDate>
+        <CreaTime>12391900</CreaTime>
+        <ArcGISFormat>1.0</ArcGISFormat>
+        <SyncOnce>TRUE</SyncOnce>
+    </Esri>
+    <tool name="BuildMosaicAndOrientedImageryDatasets" displayname="Build Mosaic and Oriented Imagery Datasets" toolboxalias="OceanVideoTools" xmlns="">
+        <parameters>
+            <param name="input_folder" displayname="Input Video Frame Folder with Frame/Camera Tables" type="Required" direction="Input" datatype="Folder" expression="input_folder">
+                <dialogReference>
+                    <para>Either the original Extract Video Frames To Images output folder (images plus *_FrameTable.csv/*_CameraTable.csv, optionally fused in place with *.aux.xml/*.ifdo.json sidecars alongside the images), or the folder produced by Extracted Frame Image Metadata Generation's 'Export to Output Folder' option (images/, metadata/, and *.csv at the folder root). Both layouts are detected automatically.</para>
+                </dialogReference>
+            </param>
+            <param name="output_gdb" displayname="Output Geodatabase (existing, or a new .gdb path)" type="Required" direction="Input" datatype="Workspace" expression="output_gdb">
+                <dialogReference>
+                    <para>File geodatabase the mosaic dataset and/or oriented imagery dataset are created in. Specify an existing .gdb, or a new .gdb path, which is created. Re-running against the same geodatabase reuses an existing dataset of the same name and adds only new images to it. It does not rebuild the dataset, so the existing coordinate system and settings are retained regardless of what is set here.</para>
+                </dialogReference>
+            </param>
+            <param name="dataset_base_name" displayname="Output Dataset Base Name" type="Required" direction="Input" datatype="String" expression="dataset_base_name">
+                <dialogReference>
+                    <para>Base name for the outputs. The mosaic dataset is created as '&lt;base name&gt;' and the oriented imagery dataset as '&lt;base name&gt;_OI', with its footprint feature class as '&lt;base name&gt;_OI_Footprint'. Must be a geodatabase-safe name: letters, digits and underscores, starting with a letter.</para>
+                </dialogReference>
+            </param>
+            <param name="output_srs" displayname="Output Coordinate System" type="Optional" direction="Input" datatype="Coordinate System" expression="{output_srs}">
+                <dialogReference>
+                    <para>Coordinate system the mosaic dataset and oriented imagery dataset are created in, and the system the Frame Table's PerspectiveX/PerspectiveY values are assumed to already be in. It must match the Output Coordinate System used by whichever tool produced the Frame Table - Cross-Reference Video Player Frame Exports writes PerspectiveX/Y in the system chosen there. A mismatch places every footprint in the wrong location. Defaults to WGS 1984 Web Mercator (EPSG:3857).</para>
+                </dialogReference>
+            </param>
+            <param name="build_mosaic" displayname="Build Mosaic Dataset" type="Required" direction="Input" datatype="Boolean" expression="build_mosaic">
+                <dialogReference>
+                    <para>Creates a mosaic dataset from the frame images, for viewing the frames as continuous imagery on a map. Uncheck to build only the oriented imagery dataset. At least one of the two must be checked.</para>
+                </dialogReference>
+            </param>
+            <param name="mosaic_raster_type" displayname="Mosaic Raster Type" type="Required" direction="Input" datatype="String" expression="mosaic_raster_type">
+                <dialogReference>
+                    <para>'Table' (recommended, and required for this data) loads a compiled table carrying each image's name, resolved file path, FCT fields, and any iFDO metadata; per-image real-world extent (xMin/xMax/yMin/yMax), nRows/nCols/nBands, and PixelType are computed/read automatically (Extract Video Frames To Images' own .tfw world files are placeholder identity transforms, not real georeferencing, so per-image georeferencing on disk is NOT required). 'Frame Camera' computes footprints photogrammetrically from the camera model instead, but requires an Omega/Phi/Kappa or Matrix exterior-orientation field table pair does not include these, so this option fails with 'Unable to load camera table.' unless the fields are added beforehand.</para>
+                </dialogReference>
+            </param>
+            <param name="mosaic_num_bands" displayname="Number of Bands" type="Optional" direction="Input" datatype="Long" expression="{mosaic_num_bands}">
+                <dialogReference>
+                    <para>Number of raster bands in the frame images. 3 for ordinary RGB video frames; 1 for greyscale. Must match the actual images or the mosaic dataset will refuse to add them.</para>
+                </dialogReference>
+            </param>
+            <param name="mosaic_pixel_type" displayname="Pixel Type" type="Optional" direction="Input" datatype="String" expression="{mosaic_pixel_type}">
+                <dialogReference>
+                    <para>Bit depth of the frame images. 8_BIT_UNSIGNED covers ordinary 8-bit-per-channel JPEG/TIFF/PNG video frames, which is what frame extraction produces.</para>
+                </dialogReference>
+            </param>
+            <param name="build_footprints" displayname="Build Footprints" type="Required" direction="Input" datatype="Boolean" expression="build_footprints">
+                <dialogReference>
+                    <para>Computes each mosaic dataset item's footprint - the polygon describing where that frame actually sits on the ground. Left on, this preserves the real-world extent computed from each frame's camera position, heading and field of view. This step is best-effort: if it fails the run still completes and the mosaic dataset is still usable, with a warning in the messages.</para>
+                </dialogReference>
+            </param>
+            <param name="build_boundary" displayname="Build Boundary" type="Required" direction="Input" datatype="Boolean" expression="build_boundary">
+                <dialogReference>
+                    <para>Computes the single polygon enclosing every item in the mosaic dataset, which is what controls the dataset's overall display extent. Best-effort, same as Build Footprints - a failure here warns rather than aborting the run.</para>
+                </dialogReference>
+            </param>
+            <param name="build_oid" displayname="Build Oriented Imagery Dataset" type="Required" direction="Input" datatype="Boolean" expression="build_oid">
+                <dialogReference>
+                    <para>Creates an oriented imagery dataset (OID), for inspecting individual frames in their real viewing geometry with the Oriented Imagery viewer rather than as a flattened map layer. Rows are written directly to the OID's own schema. Uncheck to build only the mosaic dataset. At least one of the two must be checked.</para>
+                </dialogReference>
+            </param>
+            <param name="imagery_category" displayname="Imagery Category" type="Required" direction="Input" datatype="String" expression="imagery_category">
+                <dialogReference>
+                    <para>Camera pointing configuration. Selects Esri's default camera pitch, roll, horizontal/vertical field of view, camera height and near/far distance, applied only to values a row does not already supply; a per-frame value in the Frame Table takes precedence. 'Nadir' is a downward-looking camera, the usual case for seafloor survey video. An oblique or horizontal category applies to a forward- or side-looking camera; without it, footprints are placed as if the camera were pointing at the seafloor directly beneath it.</para>
+                </dialogReference>
+            </param>
+            <param name="elevation_source" displayname="Elevation Source" type="Required" direction="Input" datatype="String" expression="elevation_source">
+                <dialogReference>
+                    <para>Ground elevation the oriented imagery viewer uses when projecting a frame onto the surface. 'None' uses no elevation surface at all, which is the usual choice for deep ocean video where no seafloor terrain model is available. 'Constant' uses the single Constant Elevation value below. 'DEM' uses the Digital Elevation Model below.</para>
+                </dialogReference>
+            </param>
+            <param name="constant_elevation" displayname="Constant Elevation (meters)" type="Optional" direction="Input" datatype="Double" expression="{constant_elevation}">
+                <dialogReference>
+                    <para>Single ground elevation in meters, applied to every frame. Only used when Elevation Source is 'Constant'. For seafloor imagery this is a depth, so it is normally NEGATIVE (e.g. -1200 for a 1200 m deep site).</para>
+                </dialogReference>
+            </param>
+            <param name="dem_input" displayname="Digital Elevation Model" type="Optional" direction="Input" datatype="Raster Layer" expression="{dem_input}">
+                <dialogReference>
+                    <para>Raster elevation surface (e.g. a bathymetry grid) sampled per frame. Only used when Elevation Source is 'DEM'. It must cover the full extent of the frame positions and use the same vertical units (meters) as the rest of the data.</para>
+                </dialogReference>
+            </param>
+            <param name="has_z" displayname="Dataset Has Z Values" type="Required" direction="Input" datatype="Boolean" expression="has_z">
+                <dialogReference>
+                    <para>Stores each camera position as a 3D point carrying its depth/altitude rather than a flat 2D point. Applicable to deep ocean video, where the camera's vertical position distinguishes one pass over a site from another at a different depth.</para>
+                </dialogReference>
+            </param>
+            <param name="build_oi_footprint" displayname="Build Oriented Imagery Footprint" type="Required" direction="Input" datatype="Boolean" expression="build_oi_footprint">
+                <dialogReference>
+                    <para>Generates the footprint feature class that makes the oriented imagery dataset selectable on a map; without it, clicking the map returns no image. Written as '&lt;Output Dataset Base Name&gt;_OI_Footprint' in the same geodatabase, where the dataset expects it. Requires a valid camera heading on every row; one is computed wherever the data does not supply it.</para>
+                </dialogReference>
+            </param>
+            <param name="oi_footprint_option" displayname="Oriented Imagery Footprint Generation Method" type="Required" direction="Input" datatype="String" expression="oi_footprint_option">
+                <dialogReference>
+                    <para>PER_IMAGE - one polygon footprint per image, computed from each image's camera parameters (CameraHeading/Pitch/Roll, HorizontalFieldOfView/VerticalFieldOfView, CameraHeight, NearDistance/FarDistance). Use when frame positions are spread over a large area. MERGE - the same per-image polygons, merged into a single, more optimized footprint polygon for the whole dataset. BUFFER - each camera point buffered by the dataset's average Far Distance and merged into one polygon; intended for street-view-style imagery, not nadir/oblique frame video. EXTENT - a single rectangular footprint from the oriented imagery dataset's overall extent; use when many camera points are packed into a small area.</para>
+                </dialogReference>
+            </param>
+            <param name="include_all_fields" displayname="Include All Frame Table Fields in Attribute Table" type="Required" direction="Input" datatype="Boolean" expression="include_all_fields">
+                <dialogReference>
+                    <para>Carries every remaining Frame Table column through into the oriented imagery dataset's attribute table as extra fields, keeping per-frame source metadata queryable alongside the imagery. Columns duplicating what the dataset stores natively (position, acquisition date, camera angles) are excluded automatically. Uncheck for a minimal attribute table.</para>
+                </dialogReference>
+            </param>
+            <param name="compute_heading" displayname="Recompute Camera Heading from Positions" type="Required" direction="Input" datatype="Boolean" expression="compute_heading">
+                <dialogReference>
+                    <para>Leave unchecked to keep CameraHeading values already present in the Frame Table when available (e.g. from Generate Deep Ocean Video Metadata) - heading is still computed from consecutive frame positions for any row missing a value, since a valid heading is required for footprint computation. Checking this recomputes heading for every row instead, overriding any existing values.</para>
+                </dialogReference>
+            </param>
+            <param name="heading_offset" displayname="Heading Offset (degrees, for off-axis camera mounts)" type="Optional" direction="Input" datatype="Double" expression="{heading_offset}">
+                <dialogReference>
+                    <para>Degrees added to every camera heading, clockwise. Applies to a camera mounted at a fixed angle to the vehicle's direction of travel: 90 for a starboard-looking camera, 270 (or -90) for port, 180 for aft-facing. 0 for a forward-facing or downward-facing camera. Applied both to headings read from the Frame Table and to headings computed from positions.</para>
+                </dialogReference>
+            </param>
+            <param name="compiled_table_folder" displayname="Compiled Table Output Folder (optional)" type="Optional" direction="Input" datatype="Folder" expression="{compiled_table_folder}">
+                <dialogReference>
+                    <para>Where the per-pair compiled table (image name, resolved file path, FCT fields, and iFDO fields as ifdo_* columns) is written. Defaults to a '&lt;Output Dataset Base Name&gt;_CompiledTables' folder next to the output geodatabase.</para>
+                </dialogReference>
+            </param>
+            <param name="out_mosaic_dataset" displayname="Output Mosaic Dataset" type="Derived" direction="Output" datatype="Mosaic Dataset" expression="{out_mosaic_dataset}" />
+            <param name="out_oid" displayname="Output Oriented Imagery Dataset" type="Derived" direction="Output" datatype="String" expression="{out_oid}" />
+        </parameters>
+        <summary>
+            <para>Loads extracted video frame images and their Frame/Camera Table CSVs into a mosaic dataset and/or an oriented imagery dataset in a geodatabase. A mosaic dataset presents the frames as continuous imagery on a map; an oriented imagery dataset preserves each frame's real viewing geometry so it can be inspected individually in the Oriented Imagery viewer. This is the data management step for the frames and metadata produced earlier in the workflow.</para>
+            <para>Accepts either the original Extract Video Frames To Images folder (optionally with *.aux.xml / *.ifdo.json sidecars already added alongside the images) or the structured images/ + metadata/ folder exported by Extracted Frame Image Metadata Generation. Each image's name, resolved file path, Frame Table fields and any iFDO metadata are compiled into one table, which feeds the mosaic dataset and is written directly into the oriented imagery dataset's own attribute schema, so the metadata carries into both.</para>
+            <para>Requires a Standard or Advanced ArcGIS Pro license; mosaic datasets are not available under Basic.</para>
+        </summary>
+    </tool>
+    <dataIdInfo>
+        <idCitation>
+            <resTitle>Build Mosaic and Oriented Imagery Datasets</resTitle>
+        </idCitation>
+    </dataIdInfo>
+</metadata>

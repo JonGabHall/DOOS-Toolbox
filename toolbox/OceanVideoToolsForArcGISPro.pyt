@@ -251,19 +251,20 @@ class ExtractedFrameImageMetadataGeneration(object):
         self.label = "Extracted Frame Image Metadata Generation"
         self.description = (
             "Writes the per-frame metadata held in a Frame Table and Camera Table into the "
-            "frame images themselves, and into standard sidecar files beside them, so each "
-            "image carries its own time, position and camera information wherever it goes. "
-            "Input is a folder of extracted frames plus the Frame/Camera Table CSV pair "
-            "produced by Esri's Extract Video Frames To Images (or by Cross-Reference Video "
-            "Player Frame Exports).\n\n"
+            "frame images themselves and into standard sidecar files beside them, so each "
+            "image carries its own time, position and camera information independently of "
+            "the tables. Input is a folder of extracted frames plus the Frame/Camera Table "
+            "CSV pair produced by Esri's Extract Video Frames To Images or by "
+            "Cross-Reference Video Player Frame Exports.\n\n"
             "Outputs, each optional: GDAL PAM sidecars (*.aux.xml, the format ArcGIS reads); "
             "Adobe XMP sidecars (*.xmp, read by Lightroom/Bridge/Photoshop); metadata "
             "embedded inside the image file itself (EXIF tags for JPEG and TIFF, tEXt chunks "
             "for PNG); image FAIR Digital Object metadata (iFDO v2.2.1 JSON, the marine "
             "imaging community standard); a BIIGLE file-metadata CSV for upload to the BIIGLE "
-            "annotation platform; and a JSON manifest recording where every image came from "
-            "and which settings produced it. Can also copy everything into a self-contained "
-            "deliverable folder, and save the metadata you type as a reusable template."
+            "annotation platform; and a JSON manifest recording the source of every image and "
+            "the settings that produced it. The run can also copy its outputs into a "
+            "self-contained deliverable folder and save the entered metadata as a reusable "
+            "template."
         )
         # canRunInBackground = False: fuse_folder() performs synchronous I/O
         # operations (file reads/writes, CSV parsing, EXIF embedding). Running in
@@ -288,11 +289,11 @@ class ExtractedFrameImageMetadataGeneration(object):
         export_folder.description = (
             "Folder holding the extracted frame images together with their Frame Table and "
             "Camera Table CSVs - the output of Esri's Extract Video Frames To Images, or of "
-            "Cross-Reference Video Player Frame Exports. The tables are found automatically by "
-            "their '*_FrameTable.csv' / '*_CameraTable.csv' names, so leave those names alone. "
-            "Both a flat folder and an already-exported images/ + metadata/ layout are "
-            "accepted. More than one Frame Table in the same folder is supported and each is "
-            "processed in turn."
+            "Cross-Reference Video Player Frame Exports. The tables are located by their "
+            "'*_FrameTable.csv' / '*_CameraTable.csv' names, which must be preserved. Both a "
+            "flat folder and an already-exported images/ + metadata/ layout are accepted. "
+            "Multiple Frame Tables in the same folder are supported and each is processed in "
+            "turn."
         )
         params.append(export_folder)
 
@@ -332,9 +333,8 @@ class ExtractedFrameImageMetadataGeneration(object):
         export_json_manifest.value = False
         export_json_manifest.description = (
             "Writes a SourceManifest.json listing every image with the absolute path it came "
-            "from, plus the settings this run used. It answers 'where did this image come "
-            "from and how was it made' months later, which matters once a deliverable folder "
-            "has been copied away from the source data."
+            "from, plus the settings used by the run. It records provenance for a deliverable "
+            "folder that has been copied away from the source data."
         )
         params.append(export_json_manifest)
 
@@ -371,9 +371,9 @@ class ExtractedFrameImageMetadataGeneration(object):
         biigle_distance_to_ground_override.enabled = False
         biigle_distance_to_ground_override.description = (
             "Single camera-to-seafloor distance in meters, written to every image's BIIGLE "
-            "row. Only used when no matching Frame Table column is found. Supply it when the "
-            "vehicle flew at a roughly constant altitude and you want BIIGLE to be able to "
-            "scale annotations."
+            "row. Used only when no matching Frame Table column is found. Applicable where "
+            "the vehicle held a roughly constant altitude; BIIGLE uses it to scale "
+            "annotations."
         )
         params.append(biigle_distance_to_ground_override)
 
@@ -401,10 +401,10 @@ class ExtractedFrameImageMetadataGeneration(object):
         export_ifdo_json.value = False
         export_ifdo_json.description = (
             "Writes image FAIR Digital Object (iFDO) metadata - the marine imaging community "
-            "standard used by repositories such as BIIGLE and PANGAEA. This is the single "
-            "on/off switch for iFDO: checking it reveals the iFDO Output Options and iFDO "
-            "Metadata Categories sections below, where you supply the deployment facts that "
-            "cannot be derived from the imagery itself."
+            "standard used by repositories such as BIIGLE and PANGAEA. This is the sole on/off "
+            "switch for iFDO output; enabling it reveals the iFDO Output Options and iFDO "
+            "Metadata Categories sections below, which hold the deployment facts that cannot "
+            "be derived from the imagery."
         )
         params.append(export_ifdo_json)
 
@@ -422,11 +422,11 @@ class ExtractedFrameImageMetadataGeneration(object):
         metadata_sidecar_formats.filter.list = [SIDECAR_FORMAT_AUX, SIDECAR_FORMAT_XMP]
         metadata_sidecar_formats.value = [SIDECAR_FORMAT_AUX]
         metadata_sidecar_formats.description = (
-            "Writes metadata to files sitting NEXT TO each image, leaving the image untouched. "
-            "'*.aux.xml' is the GDAL/Esri format ArcGIS itself understands. '*.xmp' is the "
-            "Adobe sidecar format read by Lightroom, Bridge and Photoshop - additive, not a "
-            "replacement, since ArcGIS Pro is not confirmed to read it. Select both, either, "
-            "or neither."
+            "Writes metadata to files beside each image, leaving the image itself unmodified. "
+            "'*.aux.xml' is the GDAL/Esri format ArcGIS reads. '*.xmp' is the Adobe sidecar "
+            "format read by Lightroom, Bridge and Photoshop; it is additive rather than a "
+            "replacement, as ArcGIS Pro is not confirmed to read it. Select both, either, or "
+            "neither."
         )
         params.append(metadata_sidecar_formats)
 
@@ -463,10 +463,10 @@ class ExtractedFrameImageMetadataGeneration(object):
         ifdo_template_input.description = (
             "A JSON file of iFDO values saved by a previous run's 'Export iFDO Metadata "
             "Template' option, supplying the deployment facts that cannot be derived from the "
-            "imagery - platform, sensor, licence, project, principal investigator. Fill these "
-            "in once per deployment and reuse the file for every dive. A '*.ifdo.json' written "
-            "by an earlier run also works directly; set-identity values (the set's own UUID "
-            "and name) are never carried over."
+            "imagery - platform, sensor, licence, project, principal investigator. One file "
+            "per deployment can be reused across its dives. A '*.ifdo.json' written by an "
+            "earlier run also works directly; set-identity values (the set's own UUID and "
+            "name) are never carried over."
         )
         params.append(ifdo_template_input)
 
@@ -535,9 +535,9 @@ class ExtractedFrameImageMetadataGeneration(object):
             category="Output Options")
         export_ifdo_template.value = False
         export_ifdo_template.description = (
-            "Saves the iFDO values used by this run to a JSON file you can import into later "
-            "runs. Check this after filling in the iFDO Metadata Categories once, then reuse "
-            "the file across the rest of the deployment instead of retyping them."
+            "Saves the iFDO values used by this run to a JSON file for import into later runs, "
+            "so the iFDO Metadata Categories are entered once and reused across the rest of "
+            "the deployment."
         )
         params.append(export_ifdo_template)
 
@@ -589,8 +589,8 @@ class ExtractedFrameImageMetadataGeneration(object):
         image_set_name.description = (
             "Name identifying this collection of images in the iFDO metadata, and the file "
             "name used for the single image-set JSON document. Defaults to the ArcGIS Pro "
-            "project title if one is set, otherwise the Frame Table's own name. Use something "
-            "meaningful to the deployment, such as the dive or transect identifier."
+            "project title if one is set, otherwise the Frame Table's own name. A dive or "
+            "transect identifier is the usual choice."
         )
         params.append(image_set_name)
 
@@ -607,10 +607,10 @@ class ExtractedFrameImageMetadataGeneration(object):
                 category="iFDO Metadata Categories")
             toggle.value = False
             toggle.description = (
-                "Reveals this group of iFDO fields for editing. These are facts a person "
-                "decides once per deployment - they cannot be derived from the imagery or "
-                "from ArcGIS - so they stay hidden until you ask for them. Anything left "
-                "blank is simply omitted from the iFDO document."
+                "Reveals this group of iFDO fields for editing. They record decisions made "
+                "once per deployment and cannot be derived from the imagery or from ArcGIS, "
+                "so they stay hidden until enabled. Fields left blank are omitted from the "
+                "iFDO document."
             )
             params.append(toggle)
 
@@ -1233,20 +1233,17 @@ class GenerateDeepOceanVideoMetadata(object):
     def __init__(self):
         self.label = "Generate Deep Ocean Video Metadata"
         self.description = (
-            "Builds a metadata CSV ready for Esri's Video Multiplexer from a vehicle's "
-            "navigation/telemetry log, so deep ocean video can be turned into geospatially "
-            "aware full motion video (FMV).\n\n"
-            "Only X, Y and a timestamp are required from the log. The camera facts a "
-            "navigation log almost never records - camera pitch and roll, heading, field of "
-            "view, near and far distance, height above the seafloor - are supplied instead by "
-            "a selectable Video Acquisition Profile (remotely operated vehicle, autonomous "
-            "underwater vehicle, towed sled, drop camera), which you can inspect and adjust "
-            "before the run. Heading can also be computed from the track itself. Positions are "
-            "reprojected to WGS84 longitude/latitude, which the MISB ST 0601 standard behind "
-            "full motion video requires.\n\n"
-            "REQUIREMENT: the Image Analyst extension - the final field-naming and formatting "
-            "pass is delegated to Esri's own Convert Video Metadata tool rather than "
-            "reimplemented here."
+            "Builds a metadata CSV for Esri's Video Multiplexer from a vehicle's "
+            "navigation/telemetry log.\n\n"
+            "X, Y and a timestamp are the only required columns. Camera parameters that a "
+            "navigation log does not normally record - camera pitch and roll, heading, field "
+            "of view, near and far distance, height above the seafloor - are supplied by a "
+            "selectable Video Acquisition Profile (remotely operated vehicle, autonomous "
+            "underwater vehicle, towed sled, drop camera) and can be edited before the run. "
+            "Heading can also be computed from the track. Positions are reprojected to WGS84 "
+            "longitude/latitude, as MISB ST 0601 requires.\n\n"
+            "Requires the Image Analyst extension: the final field-naming and formatting pass "
+            "is delegated to Convert Video Metadata rather than reimplemented here."
         )
         self.canRunInBackground = False
 
@@ -1282,15 +1279,14 @@ class GenerateDeepOceanVideoMetadata(object):
         )
         video_acquisition_profile.value = "ROV - Down-looking (Nadir) Camera"
         video_acquisition_profile.description = (
-            "How the camera was mounted and pointed. This is the core of the tool: it supplies "
-            "realistic estimates for the camera facts a navigation log almost never records - "
-            "camera pitch and roll relative to the vehicle, horizontal and vertical field of "
-            "view, near and far distance, and height above the seafloor - so a usable video "
-            "metadata file can still be produced from an incomplete source. Selecting a "
-            "profile immediately pre-fills the override fields below with its values, where "
-            "you can inspect and adjust them; your edits are kept until you switch profiles, "
-            "which overwrites those fields again. Choose Custom to fill them in yourself - it "
-            "pre-fills nothing and overwrites nothing."
+            "Camera mounting and pointing configuration. Supplies estimates for the "
+            "parameters a navigation log does not normally record: camera pitch and roll "
+            "relative to the vehicle, horizontal and vertical field of view, near and far "
+            "distance, and height above the seafloor. Selecting a profile pre-fills the "
+            "override fields below with its values. Edits to those fields are retained until "
+            "the profile selection changes, which overwrites them. The Custom profile "
+            "pre-fills nothing and overwrites nothing; supply every value in the override "
+            "fields."
         )
         params.append(video_acquisition_profile)
 
@@ -1330,11 +1326,10 @@ class GenerateDeepOceanVideoMetadata(object):
             direction="Input")
         create_track_fc.value = False
         create_track_fc.description = (
-            "Also writes a point feature class of the resolved track, one point per output "
-            "row, so you can put it on a map and confirm the positions look right BEFORE "
-            "multiplexing. Purely for quality control - nothing downstream consumes it. This "
-            "is the quickest way to catch a wrong Coordinate System of Telemetry X/Y, which "
-            "otherwise puts the whole track in the wrong part of the world."
+            "Writes a point feature class of the resolved track, one point per output row. "
+            "Quality control only; no downstream tool consumes it. Displaying it on a map "
+            "confirms the reprojected positions before multiplexing, and is the practical "
+            "check on the Coordinate System of Telemetry X/Y setting."
         )
         params.append(create_track_fc)
 
@@ -1361,13 +1356,11 @@ class GenerateDeepOceanVideoMetadata(object):
             category="Key Sensor Information")
         input_srs.value = arcpy.SpatialReference(4326)
         input_srs.description = (
-            "The coordinate system the telemetry log's X/Y values are ALREADY in - not a "
-            "system to convert them to. This tool always reprojects them to WGS84 longitude "
-            "and latitude, because the MISB standard the video multiplexer follows requires "
-            "geographic degrees. Getting this wrong is the single most common cause of a track "
-            "appearing in the wrong part of the world: leave it at WGS84 only if the log "
-            "genuinely holds degrees, and set the correct projected system if it holds "
-            "eastings and northings in meters."
+            "The coordinate system the telemetry X/Y values are already in, not a system to "
+            "convert them to. X/Y are reprojected to WGS84 longitude/latitude, which MISB "
+            "ST 0601 requires. Leave at WGS84 only if the log holds degrees; set the "
+            "projected system if it holds eastings and northings. A coordinate system that is "
+            "valid but incorrect for the data produces no error, only relocated coordinates."
         )
         params.append(input_srs)
 
@@ -1386,18 +1379,16 @@ class GenerateDeepOceanVideoMetadata(object):
             category="Key Sensor Information")
         x_field.description = (
             "Column holding the east-west position: longitude if the log is geographic, "
-            "easting if it is projected. Leave blank to auto-detect by name. Required data: a "
-            "row with no usable X is skipped entirely.\n\n"
-            "UNITS: whatever the Coordinate System of Telemetry X/Y above declares - decimal "
-            "degrees for a geographic system, linear units (usually meters) for a projected "
-            "one. The number is read exactly as written. Degrees-minutes-seconds text is not "
-            "parsed; convert it to decimal degrees first. A value with six or seven digits "
-            "before the decimal point is an easting, not a longitude.\n\n"
-            "PROJECTION SENSITIVE: this column is reprojected from the declared coordinate "
-            "system to WGS84 longitude/latitude, which MISB ST 0601 requires. Declaring the "
-            "wrong system does not raise an error - it silently moves the whole track, often "
-            "to another continent. Check the resolved longitude/latitude in the output before "
-            "multiplexing."
+            "easting if it is projected. Leave blank to auto-detect by name. Required: rows "
+            "with no usable X are skipped.\n\n"
+            "Units follow the Coordinate System of Telemetry X/Y above - decimal degrees for a "
+            "geographic system, linear units (usually metres) for a projected one. Values are "
+            "read as written. Degrees-minutes-seconds text is not parsed and must be converted "
+            "to decimal degrees first. A value with six or seven digits before the decimal "
+            "point is an easting, not a longitude.\n\n"
+            "The column is reprojected from the declared coordinate system to WGS84 "
+            "longitude/latitude. A wrong declared system produces no error, only relocated "
+            "coordinates; verify the output positions before multiplexing."
         )
         params.append(x_field)
 
@@ -1410,19 +1401,17 @@ class GenerateDeepOceanVideoMetadata(object):
             category="Key Sensor Information")
         y_field.description = (
             "Column holding the north-south position: latitude if the log is geographic, "
-            "northing if it is projected. Leave blank to auto-detect by name. Required data: a "
-            "row with no usable Y is skipped entirely.\n\n"
-            "UNITS: whatever the Coordinate System of Telemetry X/Y above declares - decimal "
-            "degrees for a geographic system, linear units (usually meters) for a projected "
-            "one. The number is read exactly as written. Degrees-minutes-seconds text is not "
-            "parsed; convert it to decimal degrees first. A large positive northing in the "
-            "millions from a southern-hemisphere survey carries a 10,000,000 m false "
-            "northing and only makes sense against a southern UTM zone.\n\n"
-            "PROJECTION SENSITIVE: this column is reprojected from the declared coordinate "
-            "system to WGS84 longitude/latitude, which MISB ST 0601 requires. Declaring the "
-            "wrong system does not raise an error - it silently moves the whole track, often "
-            "to another continent. Check the resolved longitude/latitude in the output before "
-            "multiplexing."
+            "northing if it is projected. Leave blank to auto-detect by name. Required: rows "
+            "with no usable Y are skipped.\n\n"
+            "Units follow the Coordinate System of Telemetry X/Y above - decimal degrees for a "
+            "geographic system, linear units (usually metres) for a projected one. Values are "
+            "read as written. Degrees-minutes-seconds text is not parsed and must be converted "
+            "to decimal degrees first. A northing in the millions from a southern-hemisphere "
+            "survey includes a 10,000,000 m false northing and requires a southern UTM "
+            "zone.\n\n"
+            "The column is reprojected from the declared coordinate system to WGS84 "
+            "longitude/latitude. A wrong declared system produces no error, only relocated "
+            "coordinates; verify the output positions before multiplexing."
         )
         params.append(y_field)
 
@@ -1435,22 +1424,21 @@ class GenerateDeepOceanVideoMetadata(object):
             category="Key Sensor Information")
         time_field.description = (
             "Column holding each row's date and time. Leave blank to auto-detect by name. "
-            "Required data: a row whose timestamp is missing or unparseable is skipped, "
-            "because the multiplexer aligns metadata to video frames by time. If no row "
-            "parses, the run fails with 'No telemetry rows had usable X, Y, and Timestamp "
-            "values'.\n\n"
-            "ACCEPTED: a Date-type field; a plain epoch number in seconds, milliseconds or "
+            "Required: rows with a missing or unparseable timestamp are skipped, because the "
+            "multiplexer aligns metadata to video frames by time. If no row parses, the run "
+            "fails with 'No telemetry rows had usable X, Y, and Timestamp values'.\n\n"
+            "Accepted forms: a Date-type field; an epoch number in seconds, milliseconds or "
             "microseconds; ISO 8601 text (2022-09-01T00:00:00Z); M/D/YYYY with or without "
-            "AM/PM; YYYY/MM/DD; M-D-YYYY; and dot-separated day-first D.M.YYYY "
-            "(01.09.2022 00:00:00 = 1 September). Unix time is accepted but not required.\n\n"
-            "WRITTEN AS: the value is converted, never passed through. Each parsed time "
-            "becomes Precision Time Stamp (integer microseconds since 1 January 1970, the "
-            "form MISB and the multiplexer require) plus a readable AcquisitionDate copy. "
-            "Rows are sorted into time order before anything else is computed.\n\n"
-            "TIME ZONE: a timestamp with no zone is assumed to be UTC. A log kept in local "
-            "time still multiplexes correctly, because spacing and order are unaffected, but "
-            "every absolute time will be off by that zone's offset. Convert to UTC first if "
-            "the video has to line up with other time-stamped records."
+            "AM/PM; YYYY/MM/DD; M-D-YYYY; and dot-separated day-first D.M.YYYY, in which "
+            "01.09.2022 is 1 September. Unix time is accepted but not required.\n\n"
+            "The value is converted, not passed through. Each parsed time is written as "
+            "Precision Time Stamp (integer microseconds since 1 January 1970, as MISB and the "
+            "multiplexer require) and as an AcquisitionDate copy. Rows are sorted into time "
+            "order before further processing.\n\n"
+            "A timestamp with no time zone is treated as UTC. A log recorded in local time "
+            "multiplexes correctly, since row order and spacing are unaffected, but its "
+            "absolute times are offset by that zone. Convert to UTC first if the video must "
+            "align with other time-stamped records."
         )
         params.append(time_field)
 
@@ -1463,20 +1451,17 @@ class GenerateDeepOceanVideoMetadata(object):
             category="Key Sensor Information")
         z_field.description = (
             "Column holding the platform's vertical position, written as-is to Sensor True "
-            "Altitude. Leave blank to auto-detect by name. Optional data: a row with no Z is "
-            "kept, not skipped. If the column is absent and no constant is set below, Sensor "
-            "True Altitude is left empty.\n\n"
-            "UNITS AND SIGN - the most common mistake: Sensor True Altitude is metres above "
-            "mean sea level, positive up. Nothing is converted here, so a depth column "
-            "(positive down, as most vehicle logs record it) must be negated before it is "
-            "used - a raw 921.62 states the vehicle is 921 m in the air rather than 921 m "
-            "under water, and the resulting footprints are meaningless. Feet are not "
-            "converted to metres either.\n\n"
-            "WHICH COLUMN: this is the vehicle's own depth or altitude relative to sea level, "
-            "not its height above the seafloor. An altimeter reading (height above the "
-            "bottom) belongs in Camera Height Above Seafloor under Video Acquisition Profile "
-            "Overrides instead. Nothing here is validated against bathymetry, so a wrong sign "
-            "or unit passes through silently."
+            "Altitude. Leave blank to auto-detect by name. Optional: rows with no Z are "
+            "retained. If the column is absent and no constant is set below, Sensor True "
+            "Altitude is empty.\n\n"
+            "Sensor True Altitude is metres above mean sea level, positive up. No unit or sign "
+            "conversion is applied. A depth column, which records positive-down values in most "
+            "vehicle logs, must be negated before use: an unmodified 921.62 states a position "
+            "921 m above sea level rather than 921 m below it. Feet are not converted to "
+            "metres.\n\n"
+            "This is the platform's position relative to sea level, not its height above the "
+            "seafloor. An altimeter reading belongs in Camera Height Above Seafloor under "
+            "Video Acquisition Profile Overrides. Values are not validated against bathymetry."
         )
         params.append(z_field)
 
@@ -1488,11 +1473,11 @@ class GenerateDeepOceanVideoMetadata(object):
             direction="Input",
             category="Key Sensor Information")
         z_constant.description = (
-            "Applied to every row whose Z is missing - all of them, when the table has no Z "
-            "column at all. Rows that carry their own Z keep it. Use this when the platform "
-            "held a known working depth or altitude that the log never recorded. Same units "
-            "and sign as the Z field above: metres above mean sea level, positive up, so a "
-            "vehicle working at 900 m depth is entered as -900. Nothing is converted."
+            "Applied to every row whose Z is missing, and to all rows when the table has no Z "
+            "column. Rows carrying their own Z are unchanged. Use it where the platform held a "
+            "known working depth or altitude that the log did not record. Units and sign "
+            "follow the Z field above: metres above mean sea level, positive up, so a working "
+            "depth of 900 m is entered as -900. No conversion is applied."
         )
         params.append(z_constant)
 
@@ -1505,13 +1490,12 @@ class GenerateDeepOceanVideoMetadata(object):
             category="Key Sensor Information")
         z_is_ellipsoid_height.value = False
         z_is_ellipsoid_height.description = (
-            "Writes Z into Sensor Ellipsoid Height Extended as well as Sensor True Altitude. "
-            "Leave this off unless you know that is what your log records: the two are "
-            "different references, and this tool has no bathymetry with which to convert "
-            "between them, so ticking it for a depth below the surface or an altitude above "
-            "the seafloor states something untrue rather than merely imprecise. Off, the "
-            "field stays empty and the multiplexer reports it as a missing value. An explicit "
-            "Additional Field Mapping to that field takes precedence over this."
+            "Writes Z to Sensor Ellipsoid Height Extended in addition to Sensor True Altitude. "
+            "Ellipsoid height and height above mean sea level are different references, and no "
+            "bathymetry or geoid model is available here to convert between them, so enable "
+            "this only for a log that records ellipsoid height. When off, the field is empty "
+            "and the multiplexer reports it as a missing value. An explicit Additional Field "
+            "Mapping to that field takes precedence over this setting."
         )
         params.append(z_is_ellipsoid_height)
 
@@ -1524,13 +1508,12 @@ class GenerateDeepOceanVideoMetadata(object):
             category="Key Sensor Information")
         write_far_distance.value = False
         write_far_distance.description = (
-            "Off by default, because the field is not needed to draw a video footprint and a "
-            "short value can stop one appearing: it caps how far the view reaches, so a "
-            "profile's few metres cannot arrive at a seafloor tens of metres away, and the "
-            "footprint is clipped to nothing. Turn it on only when the profile's far distance "
-            "is genuinely larger than the range from the camera to the ground. The value is "
-            "always written to the intermediate table either way, where the imagery tools "
-            "read it."
+            "Off by default. Sensor Far Distance is not required to draw a video footprint, "
+            "and a value shorter than the camera-to-ground range clips the footprint to "
+            "nothing: a profile's few metres cannot reach a seafloor tens of metres away. "
+            "Enable it only where the profile's far distance exceeds that range. The value is "
+            "written to the intermediate table in either case, where the imagery tools read "
+            "it."
         )
         params.append(write_far_distance)
 
@@ -1551,16 +1534,15 @@ class GenerateDeepOceanVideoMetadata(object):
         field_mapping.filters[1].type = "ValueList"
         field_mapping.filters[1].list = list(video_metadata_core.MAPPABLE_METADATA_FIELDS)
         field_mapping.description = (
-            "Sends any other telemetry column straight to a video metadata field - a recorded "
-            "heading, pitch, roll or field of view, for instance, in place of the profile's "
-            "assumed value. Type the column name on the left exactly as it appears in the "
-            "table header - the Z / Depth / Altitude Field drop-down above lists the same "
-            "names if you need to check the spelling - and pick its destination on the right. "
-            "A mapped value overrides whatever the profile or auto-detection would have "
-            "supplied, but a blank cell leaves the existing value alone. ObjectID, Precision "
-            "Time Stamp, AcquisitionDate, Sensor Longitude and Sensor Latitude are not listed "
-            "because this tool computes them. An unrecognised column name is reported as a "
-            "warning and skipped, rather than failing the run."
+            "Maps an additional telemetry column to a video metadata field, for example a "
+            "recorded heading, pitch, roll or field of view in place of the profile's assumed "
+            "value. Enter the column name on the left exactly as it appears in the table "
+            "header - the Z / Depth / Altitude Field drop-down above lists the same names - "
+            "and select its destination on the right. A mapped value overrides the profile or "
+            "auto-detected value; a blank cell leaves the existing value unchanged. ObjectID, "
+            "Precision Time Stamp, AcquisitionDate, Sensor Longitude and Sensor Latitude are "
+            "not listed because this tool computes them. An unrecognised column name is "
+            "reported as a warning and skipped rather than failing the run."
         )
         params.append(field_mapping)
 
@@ -1574,11 +1556,10 @@ class GenerateDeepOceanVideoMetadata(object):
                 direction="Input",
                 category="Video Acquisition Profile Overrides")
             p.description = (
-                "Pre-filled from the Video Acquisition Profile selected above. Edit it to "
-                "describe your actual camera rig; the value here is written to every output "
-                "row. Your edits are kept until you change the profile selection, which "
-                "overwrites this field again. The Custom profile never pre-fills or "
-                "overwrites anything - supply every value here yourself."
+                "Pre-filled from the Video Acquisition Profile selected above; edit it to "
+                "match the camera rig in use. The value is written to every output row. Edits "
+                "are retained until the profile selection changes, which overwrites this "
+                "field. The Custom profile pre-fills nothing and overwrites nothing."
             )
             params.append(p)
 
@@ -1593,9 +1574,8 @@ class GenerateDeepOceanVideoMetadata(object):
         import_profile_template.filter.list = ["json"]
         import_profile_template.description = (
             "A JSON file of camera settings saved by a previous run's Export Resolved Profile "
-            "option. Use it to apply one vehicle's measured rig settings across every dive of "
-            "a cruise instead of retyping them. Values loaded here fill the override fields "
-            "above."
+            "option. Applies one vehicle's measured rig settings across multiple dives of a "
+            "cruise. Values loaded here fill the override fields above."
         )
         params.append(import_profile_template)
 
@@ -1608,10 +1588,9 @@ class GenerateDeepOceanVideoMetadata(object):
             category="Profile Template")
         export_profile_template.value = False
         export_profile_template.description = (
-            "Saves the camera settings actually used by this run - the selected profile plus "
-            "any edits you made to the override fields - as a JSON file you can import into "
-            "later runs. Check this once you have the rig's settings right, then reuse the "
-            "file for every subsequent dive with the same vehicle."
+            "Saves the camera settings used by this run - the selected profile plus any edits "
+            "to the override fields - as a JSON file for import into later runs of the same "
+            "vehicle."
         )
         params.append(export_profile_template)
 
@@ -1640,9 +1619,9 @@ class GenerateDeepOceanVideoMetadata(object):
             category="Camera Model")
         resample_interval.description = (
             "Thins the telemetry to one row per this many seconds. Leave blank to keep every "
-            "row. Useful when the log is sampled far faster than the video needs - a 10 Hz "
-            "log over a long dive produces a very large metadata file, and 1 second per row "
-            "is usually ample for multiplexing."
+            "row. A high-rate log - 10 Hz over a long dive, for example - produces a very "
+            "large metadata file; one row per second is generally sufficient for "
+            "multiplexing."
         )
         params.append(resample_interval)
 
@@ -1656,8 +1635,7 @@ class GenerateDeepOceanVideoMetadata(object):
         camera_id.value = 1
         camera_id.description = (
             "Identifier for the camera these settings describe. One physical camera per run, "
-            "so the default of 1 is correct unless you are keeping several cameras' outputs "
-            "distinct."
+            "so the default of 1 applies unless several cameras' outputs are kept distinct."
         )
         params.append(camera_id)
 
@@ -2012,8 +1990,8 @@ class BuildMosaicAndOrientedImageryDatasets(object):
             "mosaic dataset and/or an oriented imagery dataset in a geodatabase. A mosaic "
             "dataset presents the frames as continuous imagery on a map; an oriented imagery "
             "dataset preserves each frame's real viewing geometry so it can be inspected "
-            "individually in the Oriented Imagery viewer. This is how the frames and metadata "
-            "produced earlier in the workflow are turned into managed, shareable datasets.\n\n"
+            "individually in the Oriented Imagery viewer. This is the data management step "
+            "for the frames and metadata produced earlier in the workflow.\n\n"
             "Accepts either the original Extract Video Frames To Images folder (optionally "
             "with *.aux.xml / *.ifdo.json sidecars already added alongside the images) or the "
             "structured images/ + metadata/ folder exported by Extracted Frame Image Metadata "
@@ -2021,7 +1999,7 @@ class BuildMosaicAndOrientedImageryDatasets(object):
             "iFDO metadata are compiled into one table, which feeds the mosaic dataset and is "
             "written directly into the oriented imagery dataset's own attribute schema, so "
             "the metadata carries into both.\n\n"
-            "REQUIREMENT: a Standard or Advanced ArcGIS Pro license - mosaic datasets are not "
+            "Requires a Standard or Advanced ArcGIS Pro license; mosaic datasets are not "
             "available under Basic."
         )
         self.canRunInBackground = False
@@ -2052,10 +2030,10 @@ class BuildMosaicAndOrientedImageryDatasets(object):
             direction="Input")
         output_gdb.description = (
             "File geodatabase the mosaic dataset and/or oriented imagery dataset are created "
-            "in. Point at an existing .gdb, or type a new .gdb path and it will be created. "
-            "Re-running against the same geodatabase REUSES an existing dataset of the same "
-            "name and adds only new images to it - it does not rebuild it, so the existing "
-            "dataset's coordinate system and settings are kept even if you change them here."
+            "in. Specify an existing .gdb, or a new .gdb path, which is created. Re-running "
+            "against the same geodatabase reuses an existing dataset of the same name and "
+            "adds only new images to it. It does not rebuild the dataset, so the existing "
+            "coordinate system and settings are retained regardless of what is set here."
         )
         params.append(output_gdb)
 
@@ -2068,7 +2046,7 @@ class BuildMosaicAndOrientedImageryDatasets(object):
         dataset_base_name.description = (
             "Base name for the outputs. The mosaic dataset is created as '<base name>' and "
             "the oriented imagery dataset as '<base name>_OI', with its footprint feature "
-            "class as '<base name>_OI_Footprint'. Use a geodatabase-safe name: letters, "
+            "class as '<base name>_OI_Footprint'. Must be a geodatabase-safe name: letters, "
             "digits and underscores, starting with a letter."
         )
         params.append(dataset_base_name)
@@ -2083,9 +2061,9 @@ class BuildMosaicAndOrientedImageryDatasets(object):
         output_srs.description = (
             "Coordinate system the mosaic dataset and oriented imagery dataset are created "
             "in, and the system the Frame Table's PerspectiveX/PerspectiveY values are "
-            "assumed to already be in. This MUST match the Output Coordinate System used by "
-            "whichever tool produced the Frame Table (Cross-Reference Video Player Frame "
-            "Exports writes PerspectiveX/Y in the system chosen there) - a mismatch places "
+            "assumed to already be in. It must match the Output Coordinate System used by "
+            "whichever tool produced the Frame Table - Cross-Reference Video Player Frame "
+            "Exports writes PerspectiveX/Y in the system chosen there. A mismatch places "
             "every footprint in the wrong location. Defaults to WGS 1984 Web Mercator "
             "(EPSG:3857)."
         )
@@ -2103,9 +2081,9 @@ class BuildMosaicAndOrientedImageryDatasets(object):
             category="Mosaic Dataset")
         build_mosaic.value = True
         build_mosaic.description = (
-            "Creates a mosaic dataset from the frame images. A mosaic dataset is the right "
-            "output for viewing the frames as continuous imagery on a map. Uncheck to build "
-            "only the oriented imagery dataset. At least one of the two must be checked."
+            "Creates a mosaic dataset from the frame images, for viewing the frames as "
+            "continuous imagery on a map. Uncheck to build only the oriented imagery dataset. "
+            "At least one of the two must be checked."
         )
         params.append(build_mosaic)
 
@@ -2127,9 +2105,9 @@ class BuildMosaicAndOrientedImageryDatasets(object):
             "georeferencing, so per-image georeferencing on disk is NOT required). "
             "'Frame Camera' computes footprints photogrammetrically from the camera model "
             "instead, but requires an Omega/Phi/Kappa or Matrix exterior-orientation field "
-            "in the Frame Table - Extract Video Frames To Images' Frame/Camera Table pair "
-            "does not include these, so this option will fail with 'Unable to load camera "
-            "table.' unless you add them yourself."
+            "table pair "
+            "does not include these, so this option fails with 'Unable to load camera "
+            "table.' unless the fields are added beforehand."
         )
         params.append(mosaic_raster_type)
 
@@ -2207,11 +2185,10 @@ class BuildMosaicAndOrientedImageryDatasets(object):
             category="Oriented Imagery Dataset")
         build_oid.value = True
         build_oid.description = (
-            "Creates an oriented imagery dataset (OID) - the right output for inspecting "
-            "individual frames in their real viewing geometry with the Oriented Imagery "
-            "viewer, rather than as a flattened map layer. Rows are written directly to the "
-            "OID's own schema. Uncheck to build only the mosaic dataset. At least one of "
-            "the two must be checked."
+            "Creates an oriented imagery dataset (OID), for inspecting individual frames in "
+            "their real viewing geometry with the Oriented Imagery viewer rather than as a "
+            "flattened map layer. Rows are written directly to the OID's own schema. Uncheck "
+            "to build only the mosaic dataset. At least one of the two must be checked."
         )
         params.append(build_oid)
 
@@ -2225,13 +2202,13 @@ class BuildMosaicAndOrientedImageryDatasets(object):
         imagery_category.filter.list = mosaic_oi_core.IMAGERY_CATEGORY_CHOICES
         imagery_category.value = "Nadir"
         imagery_category.description = (
-            "How the camera was pointed. This selects Esri's own default camera pitch, roll, "
-            "horizontal/vertical field of view, camera height and near/far distance, used to "
-            "fill in ONLY those values a row does not already supply - a real per-frame value "
-            "in the Frame Table always wins. 'Nadir' means looking straight down, the usual "
-            "case for downward-facing seafloor survey video; choose an oblique or horizontal "
-            "category for a forward- or side-looking camera, otherwise footprints are placed "
-            "as if the camera were pointing at the seafloor directly beneath it."
+            "Camera pointing configuration. Selects Esri's default camera pitch, roll, "
+            "horizontal/vertical field of view, camera height and near/far distance, applied "
+            "only to values a row does not already supply; a per-frame value in the Frame "
+            "Table takes precedence. 'Nadir' is a downward-looking camera, the usual case for "
+            "seafloor survey video. An oblique or horizontal category applies to a forward- "
+            "or side-looking camera; without it, footprints are placed as if the camera were "
+            "pointing at the seafloor directly beneath it."
         )
         params.append(imagery_category)
 
@@ -2296,10 +2273,10 @@ class BuildMosaicAndOrientedImageryDatasets(object):
             category="Oriented Imagery Dataset")
         has_z.value = True
         has_z.description = (
-            "Stores each camera position as a 3D point carrying its depth/altitude, rather "
-            "than a flat 2D point. Leave checked for deep ocean video, where the camera's "
-            "vertical position is meaningful and is what separates one pass over a site from "
-            "another at a different depth."
+            "Stores each camera position as a 3D point carrying its depth/altitude rather "
+            "than a flat 2D point. Applicable to deep ocean video, where the camera's "
+            "vertical position distinguishes one pass over a site from another at a "
+            "different depth."
         )
         params.append(has_z)
 
@@ -2313,10 +2290,10 @@ class BuildMosaicAndOrientedImageryDatasets(object):
         build_oi_footprint.value = True
         build_oi_footprint.description = (
             "Generates the footprint feature class that makes the oriented imagery dataset "
-            "selectable on a map - without it, clicking the map will not find any image. "
-            "Written as '<Output Dataset Base Name>_OI_Footprint' in the same geodatabase, "
-            "which is where the dataset expects to find it. Requires a valid camera heading "
-            "on every row; the tool always computes one when the data does not supply it."
+            "selectable on a map; without it, clicking the map returns no image. Written as "
+            "'<Output Dataset Base Name>_OI_Footprint' in the same geodatabase, where the "
+            "dataset expects it. Requires a valid camera heading on every row; one is "
+            "computed wherever the data does not supply it."
         )
         params.append(build_oi_footprint)
 
@@ -2354,9 +2331,9 @@ class BuildMosaicAndOrientedImageryDatasets(object):
         include_all_fields.value = True
         include_all_fields.description = (
             "Carries every remaining Frame Table column through into the oriented imagery "
-            "dataset's attribute table as extra fields, so per-frame source metadata stays "
-            "queryable alongside the imagery. Columns that duplicate what the dataset already "
-            "stores natively (position, acquisition date, camera angles) are excluded "
+            "dataset's attribute table as extra fields, keeping per-frame source metadata "
+            "queryable alongside the imagery. Columns duplicating what the dataset stores "
+            "natively (position, acquisition date, camera angles) are excluded "
             "automatically. Uncheck for a minimal attribute table."
         )
         params.append(include_all_fields)
@@ -2387,11 +2364,11 @@ class BuildMosaicAndOrientedImageryDatasets(object):
             category="Oriented Imagery Dataset")
         heading_offset.value = 0.0
         heading_offset.description = (
-            "Degrees added to every camera heading, clockwise. Use this when the camera is "
-            "mounted at a fixed angle to the vehicle's direction of travel: 90 for a camera "
-            "looking off the starboard side, 270 (or -90) for port, 180 for aft-facing. "
-            "Leave at 0 for a forward-facing or downward-facing camera. Applies both to "
-            "headings read from the Frame Table and to headings computed from positions."
+            "Degrees added to every camera heading, clockwise. Applies to a camera mounted at "
+            "a fixed angle to the vehicle's direction of travel: 90 for a starboard-looking "
+            "camera, 270 (or -90) for port, 180 for aft-facing. 0 for a forward-facing or "
+            "downward-facing camera. Applied both to headings read from the Frame Table and "
+            "to headings computed from positions."
         )
         params.append(heading_offset)
 
@@ -2582,10 +2559,10 @@ class CrossReferenceVideoPlayerFrames(object):
             "the nearest row of a video metadata table, producing the same Frame/Camera Table "
             "pair that Extract Video Frames To Images produces automatically.\n\n"
             "The result is a drop-in input for Extracted Frame Image Metadata Generation and "
-            "Build Mosaic and Oriented Imagery Datasets, so manually grabbed frames rejoin "
+            "Build Mosaic and Oriented Imagery Datasets, placing manually grabbed frames in "
             "the same workflow as automatically extracted ones. Frames with no match inside "
-            "the tolerance are kept and flagged, never silently dropped. Can also write "
-            "sidecar metadata directly, and re-running only processes newly added frames."
+            "the tolerance are retained and flagged rather than dropped. Sidecar metadata can "
+            "also be written directly, and a re-run processes only newly added frames."
         )
         self.canRunInBackground = False
 
@@ -2600,11 +2577,11 @@ class CrossReferenceVideoPlayerFrames(object):
             direction="Input")
         image_folder.description = (
             "Folder holding frames exported one at a time from the ArcGIS Pro video player. "
-            "Those files have NO Frame Table of their own - only a filename ending in the "
-            "frame's elapsed video time in milliseconds, e.g. a grab at 00:01.767 is saved as "
-            "'..._1767.tif'. That suffix is what this tool matches on, so do not rename the "
-            "files beforehand. Output tables are written back into this same folder. Re-running "
-            "after exporting more frames only processes the new ones."
+            "Those files have no Frame Table of their own, only a filename ending in the "
+            "frame's elapsed video time in milliseconds: a grab at 00:01.767 is saved as "
+            "'..._1767.tif'. That suffix is what the match is made on, so the files must not "
+            "be renamed beforehand. Output tables are written back into this folder. A re-run "
+            "after exporting more frames processes only the new ones."
         )
         params.append(image_folder)
 
@@ -2615,7 +2592,7 @@ class CrossReferenceVideoPlayerFrames(object):
             parameterType="Required",
             direction="Input")
         metadata_table.description = (
-            "Per-second (or similar) telemetry for the SAME video the frames were exported "
+            "Per-second (or similar) telemetry for the same video the frames were exported "
             "from - a CSV, Excel worksheet, or geodatabase table. Each frame's elapsed time is "
             "converted to an absolute timestamp and matched to the nearest row here. Longitude "
             "and latitude columns must be geographic WGS84 degrees. Every other column "
@@ -2631,9 +2608,9 @@ class CrossReferenceVideoPlayerFrames(object):
             parameterType="Optional",
             direction="Input")
         time_field.description = (
-            "Column holding each row's absolute timestamp. Leave blank to auto-detect by name "
-            "(e.g. 'Precision Time Stamp'). Set it explicitly when the table has more than one "
-            "time-like column, or when auto-detection reports a miss."
+            "Column holding each row's absolute timestamp. Leave blank to auto-detect by name, "
+            "for example 'Precision Time Stamp'. Set it explicitly where the table has more "
+            "than one time-like column, or where auto-detection reports a miss."
         )
         params.append(time_field)
 
@@ -2645,12 +2622,12 @@ class CrossReferenceVideoPlayerFrames(object):
             parameterType="Optional",
             direction="Input")
         time_tolerance_seconds.description = (
-            "How far apart a frame and a metadata row may be in time and still be considered a "
-            "match. Blank uses half the table's own median sampling interval - the tightest "
-            "value that still lets every frame pair with its genuinely nearest sample. Do not "
-            "set this to 0: frames land at arbitrary elapsed times while the table is sampled "
-            "at discrete instants, so an exact match almost never exists. Frames outside the "
-            "tolerance are KEPT, flagged unmatched with blank metadata, never dropped."
+            "Maximum separation in time between a frame and a metadata row for the pair to be "
+            "considered a match. Blank uses half the table's median sampling interval, the "
+            "tightest value that still pairs every frame with its nearest sample. A value of "
+            "0 matches nothing: frames land at arbitrary elapsed times while the table is "
+            "sampled at discrete instants, so an exact match rarely exists. Frames outside "
+            "the tolerance are retained and flagged unmatched with blank metadata."
         )
         params.append(time_tolerance_seconds)
 
@@ -2661,13 +2638,13 @@ class CrossReferenceVideoPlayerFrames(object):
             parameterType="Required",
             direction="Input")
         output_name.description = (
-            "Base filename only, not a location - output table(s) are always written into the "
-            "Video Player Frame Export Folder above, next to the images, as "
+            "Base filename only, not a location. Output tables are always written into the "
+            "Video Player Frame Export Folder above, beside the images, as "
             "'<name>_FrameTable.csv' / '<name>_CameraTable.csv' / "
-            "'<name>_MatchedMetadataTable.csv'. This is required: Video Frame Image Metadata "
-            "Fusion and Build Mosaic and Oriented Imagery Datasets both auto-discover "
-            "Frame/Camera Table pairs by scanning that same folder, so the tables must live "
-            "there to be found - there is no separate output-location parameter."
+            "'<name>_MatchedMetadataTable.csv'. There is no separate output-location "
+            "parameter: Extracted Frame Image Metadata Generation and Build Mosaic and "
+            "Oriented Imagery Datasets discover Frame/Camera Table pairs by scanning that "
+            "folder, so the tables must be written there."
         )
         params.append(output_name)
 
@@ -2679,16 +2656,16 @@ class CrossReferenceVideoPlayerFrames(object):
             direction="Input")
         output_srs.value = arcpy.SpatialReference(3857)
         output_srs.description = (
-            "Only affects the Frame Table's PerspectiveX/Y columns, which Build Mosaic and "
-            "Oriented Imagery Datasets uses for placement - must match that tool's own Output "
-            "Coordinate System if it will be run against this output afterward. Unrelated to "
-            "the Video Multiplexer: this tool passes Platform Longitude/Latitude through from "
-            "the input metadata table's own WGS84 values untouched (never reprojected), and per "
-            "Esri's Video Multiplexer documentation, Sensor Latitude/Longitude must always be "
-            "plain geographic WGS84 degrees (MISB ST 0601) regardless of this parameter - the "
-            "Multiplexer's own 'Input Coordinate System' only applies to optional frame-corner "
-            "ground coordinates supplied separately in its metadata file, not to Sensor Lat/Lon, "
-            "and Esri's docs do not require WKID 3857 specifically for that or any other field."
+            "Affects only the Frame Table's PerspectiveX/Y columns, which Build Mosaic and "
+            "Oriented Imagery Datasets uses for placement; it must match that tool's Output "
+            "Coordinate System if it will be run against this output. It is unrelated to the "
+            "Video Multiplexer: Platform Longitude/Latitude are passed through from the input "
+            "metadata table's WGS84 values without reprojection, and per Esri's Video "
+            "Multiplexer documentation Sensor Latitude/Longitude must always be geographic "
+            "WGS84 degrees (MISB ST 0601) regardless of this parameter. The Multiplexer's own "
+            "'Input Coordinate System' applies only to optional frame-corner ground "
+            "coordinates supplied separately in its metadata file, not to Sensor Lat/Lon, and "
+            "Esri's documentation does not require WKID 3857 for that or any other field."
         )
         params.append(output_srs)
 
@@ -2701,11 +2678,11 @@ class CrossReferenceVideoPlayerFrames(object):
             direction="Input")
         write_frame_camera_table.value = True
         write_frame_camera_table.description = (
-            "Writes this project's canonical Frame Table and Camera Table CSV pair - the "
-            "schema the downstream metadata-generation and mosaic/oriented-imagery tools "
-            "read. Leave checked unless you only want the matched-metadata passthrough below. "
-            "Note the Frame Table is also what lets a re-run skip frames already processed, so "
-            "unchecking it means every re-run reprocesses the whole folder."
+            "Writes this project's canonical Frame Table and Camera Table CSV pair, the schema "
+            "the downstream metadata-generation and mosaic/oriented-imagery tools read. "
+            "Uncheck only for the matched-metadata passthrough below. The Frame Table is also "
+            "what allows a re-run to skip frames already processed, so with it unchecked "
+            "every re-run reprocesses the whole folder."
         )
         params.append(write_frame_camera_table)
 
@@ -2718,10 +2695,10 @@ class CrossReferenceVideoPlayerFrames(object):
             direction="Input")
         write_matched_metadata_table.value = False
         write_matched_metadata_table.description = (
-            "Writes a copy of the matched rows from the input metadata table, unchanged - same "
-            "columns, same order, one row per matched frame. Use this to feed another "
+            "Writes a copy of the matched rows from the input metadata table, unchanged: same "
+            "columns, same order, one row per matched frame. Intended for feeding another "
             "MISB-consuming tool such as the Video Multiplexer. This is a different schema "
-            "from the Frame/Camera Table above, which exists for the imagery pipeline; the two "
+            "from the Frame/Camera Table above, which serves the imagery pipeline; the two "
             "are independent and can both be written in one run."
         )
         params.append(write_matched_metadata_table)
@@ -2784,9 +2761,9 @@ class CrossReferenceVideoPlayerFrames(object):
             category="Metadata Output")
         write_aux.value = True
         write_aux.description = (
-            "Writes a GDAL/Esri-style '<image>.aux.xml' sidecar next to each matched frame, "
-            "carrying its matched metadata. Never modifies image pixels, and works for every "
-            "image format. This is the safest option and is on by default."
+            "Writes a GDAL/Esri-style '<image>.aux.xml' sidecar beside each matched frame, "
+            "carrying its matched metadata. Image pixels are never modified, and the format "
+            "applies to every image type. On by default."
         )
         params.append(write_aux)
 
@@ -2799,10 +2776,11 @@ class CrossReferenceVideoPlayerFrames(object):
             category="Metadata Output")
         write_native_metadata.value = False
         write_native_metadata.description = (
-            "Writes metadata INSIDE each image file (EXIF tags for JPEG/TIFF, tEXt chunks for "
-            "PNG), so it travels with the file outside ArcGIS. This REWRITES the image, so "
-            "keep an unmodified copy if the originals matter. Requires the Pillow package, "
-            "which ships with ArcGIS Pro; the step is skipped with a warning if it is absent."
+            "Writes metadata inside each image file - EXIF tags for JPEG/TIFF, tEXt chunks for "
+            "PNG - so it travels with the file outside ArcGIS. The image is rewritten in the "
+            "process; retain an unmodified copy where the originals must be preserved. "
+            "Requires the Pillow package, which ships with ArcGIS Pro; the step is skipped "
+            "with a warning if it is absent."
         )
         params.append(write_native_metadata)
 
@@ -2831,8 +2809,8 @@ class CrossReferenceVideoPlayerFrames(object):
         ifdo_template_input.filter.list = ["json"]
         ifdo_template_input.description = (
             "A JSON file of iFDO values saved from a previous run, supplying the facts that "
-            "cannot be derived from the data itself (platform, sensor, licence, project). "
-            "Reuse one per deployment instead of retyping them. An existing '*.ifdo.json' "
+            "cannot be derived from the data itself: platform, sensor, licence, project. One "
+            "file per deployment can be reused across its dives. An existing '*.ifdo.json' "
             "written by an earlier run can be used directly."
         )
         params.append(ifdo_template_input)
@@ -2846,8 +2824,7 @@ class CrossReferenceVideoPlayerFrames(object):
             category="Metadata Output")
         image_set_name.description = (
             "Name identifying this collection of frames in the iFDO metadata. Defaults to the "
-            "output table name. Use something meaningful to the deployment, e.g. the dive or "
-            "transect identifier."
+            "output table name. A dive or transect identifier is the usual choice."
         )
         params.append(image_set_name)
 
@@ -3093,10 +3070,10 @@ class InspectVideoAndSensorData(object):
             "internal discontinuities ('breaks'), sensor sampling interval statistics, and "
             "whether the sensor table's time range actually overlaps the video's. Run it "
             "before extracting frames to confirm the two inputs line up in time, or "
-            "standalone against just a table for its interval and value statistics. "
-            "REQUIREMENTS: reading a VIDEO needs the 'av' (PyAV) package installed in a "
-            "cloned ArcGIS Pro Python environment; the table-only path needs nothing beyond "
-            "a default ArcGIS Pro install."
+            "standalone against a table alone for its interval and value statistics.\n\n"
+            "Reading a video requires the 'av' (PyAV) package installed in a cloned ArcGIS "
+            "Pro Python environment. The table-only path requires nothing beyond a default "
+            "ArcGIS Pro installation."
         )
         self.canRunInBackground = False
 
@@ -3114,10 +3091,10 @@ class InspectVideoAndSensorData(object):
             "mpg", "mpg2", "mpg4", "ps", "ts", "vob", "wmv",
         ]
         input_video.description = (
-            "Optional if a Sensor Data Table is supplied instead - at least one of the two "
-            "inputs is required. Supplying only a table runs this tool purely as a table "
-            "statistics/gap-inspection utility (CSV, Excel worksheet, or a File Geodatabase "
-            "table, via the Sensor Data Table parameter below)."
+            "Optional where a Sensor Data Table is supplied instead; at least one of the two "
+            "inputs is required. Supplying only a table runs this tool as a table "
+            "statistics/gap-inspection utility, against a CSV, Excel worksheet, or file "
+            "geodatabase table given in the Sensor Data Table parameter below."
         )
         params.append(input_video)
 
@@ -3128,9 +3105,9 @@ class InspectVideoAndSensorData(object):
             parameterType="Optional",
             direction="Input")
         sensor_table.description = (
-            "Optional if an Input Video File is supplied instead - at least one of the two "
-            "inputs is required. Can be supplied alone (no video) to inspect a table's own "
-            "timestamp-interval statistics/gaps without a video at all."
+            "Optional where an Input Video File is supplied instead; at least one of the two "
+            "inputs is required. Can be supplied alone, with no video, to inspect a table's "
+            "timestamp-interval statistics and gaps."
         )
         params.append(sensor_table)
 
@@ -3142,11 +3119,11 @@ class InspectVideoAndSensorData(object):
             direction="Input",
             category="Combined Variable Table")
         secondary_sensor_table.description = (
-            "Optional second table (e.g. a CTD/chemistry log) whose columns are joined onto "
-            "the Sensor Data Table by nearest timestamp when Build Combined Variable Table is "
-            "checked. Rows with no match inside the join tolerance keep blank values rather "
-            "than being dropped. A column name already present in the Sensor Data Table is "
-            "suffixed (_2) rather than overwriting it."
+            "Optional second table, for example a CTD or chemistry log, whose columns are "
+            "joined onto the Sensor Data Table by nearest timestamp when Build Combined "
+            "Variable Table is checked. Rows with no match inside the join tolerance retain "
+            "blank values rather than being dropped. A column name already present in the "
+            "Sensor Data Table is suffixed (_2) rather than overwritten."
         )
         params.append(secondary_sensor_table)
 
@@ -3159,10 +3136,10 @@ class InspectVideoAndSensorData(object):
             category="Combined Variable Table")
         build_variable_table.value = False
         build_variable_table.description = (
-            "Writes the Sensor Data Table (optionally joined with the Secondary Sensor Table) "
+            "Writes the Sensor Data Table, optionally joined with the Secondary Sensor Table, "
             "into a single geodatabase table, so one table holds both the video metadata and "
-            "the sensor metadata for a deployment. Skip this if you already have a single "
-            "table holding both."
+            "the sensor metadata for a deployment. Not required where a single table already "
+            "holds both."
         )
         params.append(build_variable_table)
 
@@ -3203,9 +3180,9 @@ class InspectVideoAndSensorData(object):
             category="Combined Variable Table")
         join_tolerance_seconds.description = (
             "Maximum timestamp difference for a Secondary Sensor Table row to be joined onto "
-            "a Sensor Data Table row. Blank computes half the secondary table's own median "
-            "sampling interval - the tightest tolerance that still lets every row pair with "
-            "its genuinely nearest sample."
+            "a Sensor Data Table row. Blank computes half the secondary table's median "
+            "sampling interval, the tightest tolerance that still pairs every row with its "
+            "nearest sample."
         )
         params.append(join_tolerance_seconds)
 
@@ -3217,10 +3194,10 @@ class InspectVideoAndSensorData(object):
             parameterType="Optional",
             direction="Input")
         video_start_time_override.description = (
-            "Absolute UTC start time of the video, e.g. '2024-06-01T14:30:00Z'. Only needed "
-            "when the video carries no embedded MISB KLV metadata AND no container "
-            "'creation_time' tag - without one of those three the report cannot place the "
-            "video on an absolute timeline, and overlap with the sensor table cannot be "
+            "Absolute UTC start time of the video, for example '2024-06-01T14:30:00Z'. "
+            "Required only where the video carries neither embedded MISB KLV metadata nor a "
+            "container 'creation_time' tag; without one of the three the report cannot place "
+            "the video on an absolute timeline and overlap with the sensor table cannot be "
             "checked. Resolution order is: this override, then embedded KLV, then the "
             "container tag, then the sensor table's earliest timestamp."
         )
@@ -3293,10 +3270,10 @@ class InspectVideoAndSensorData(object):
             direction="Input",
             category="Advanced")
         sensor_gap_threshold_seconds.description = (
-            "If set, a gap between consecutive sensor table timestamps larger than this "
-            "FIXED number of seconds is reported as a 'gap' - overrides Sensor Gap "
-            "Sensitivity above entirely. Useful when the table's sampling rate is too "
-            "irregular for a median-based threshold to mean anything."
+            "When set, a gap between consecutive sensor table timestamps larger than this "
+            "fixed number of seconds is reported as a 'gap', overriding Sensor Gap "
+            "Sensitivity above. Applicable where the table's sampling rate is too irregular "
+            "for a median-based threshold to be meaningful."
         )
         params.append(sensor_gap_threshold_seconds)
 
@@ -3308,12 +3285,12 @@ class InspectVideoAndSensorData(object):
             direction="Input")
         export_embedded_telemetry_csv.value = True
         export_embedded_telemetry_csv.description = (
-            "When the video carries its own embedded MISB ST 0601 KLV metadata, write it out "
-            "as a CSV - one row per packet, holding the timestamp plus whichever of Platform "
-            "Heading/Pitch/Roll Angle and Sensor Latitude/Longitude/True Altitude are present. "
-            "This recovers the telemetry from a multiplexed video when the original navigation "
-            "log is no longer to hand, and produces an ordinary sensor table you can inspect, "
-            "map, or feed to any tool in this toolbox that accepts one."
+            "Where the video carries embedded MISB ST 0601 KLV metadata, writes it out as a "
+            "CSV: one row per packet, holding the timestamp plus whichever of Platform "
+            "Heading/Pitch/Roll Angle and Sensor Latitude/Longitude/True Altitude are "
+            "present. This recovers telemetry from a multiplexed video where the original "
+            "navigation log is unavailable, and produces an ordinary sensor table that can be "
+            "inspected, mapped, or passed to any tool in this toolbox that accepts one."
         )
         params.append(export_embedded_telemetry_csv)
 
