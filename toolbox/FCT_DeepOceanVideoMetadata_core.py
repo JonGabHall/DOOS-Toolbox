@@ -394,6 +394,9 @@ def preview_resolve_telemetry_fields(field_names, overrides=None):
 # Non-ISO formats seen in real telemetry logs this tool has been run
 # against (e.g. a real ROV telemetry export uses "1/9/2022 1:28:32" and
 # "1/9/2022 1:28:32 AM") - tried after ISO 8601 fails, in this order.
+# Dot-separated dates are read day-first ("01.09.2022" = 1 September), the
+# convention wherever that separator is used; slash-separated stay
+# month-first, matching the logs above.
 _TIMESTAMP_STRPTIME_FORMATS = (
     "%m/%d/%Y %H:%M:%S",
     "%m/%d/%Y %I:%M:%S %p",
@@ -401,6 +404,8 @@ _TIMESTAMP_STRPTIME_FORMATS = (
     "%Y-%m-%d %H:%M:%S",
     "%Y/%m/%d %H:%M:%S",
     "%m-%d-%Y %H:%M:%S",
+    "%d.%m.%Y %H:%M:%S",
+    "%d.%m.%Y",
 )
 
 
