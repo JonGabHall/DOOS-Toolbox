@@ -1,2 +1,195 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<metadata xml:lang="en"><Esri><CreaDate>20260828</CreaDate><CreaTime>15060200</CreaTime><ArcGISFormat>1.0</ArcGISFormat><SyncOnce>TRUE</SyncOnce></Esri></metadata>
+<metadata xml:lang="en">
+    <Esri>
+        <CreaDate>20260828</CreaDate>
+        <CreaTime>15060200</CreaTime>
+        <ArcGISFormat>1.0</ArcGISFormat>
+        <SyncOnce>TRUE</SyncOnce>
+    </Esri>
+    <tool name="GenerateDeepOceanVideoMetadata" displayname="Generate Deep Ocean Video Metadata" toolboxalias="OceanVideoTools" xmlns="">
+        <parameters>
+            <param name="telemetry_table" displayname="Input Navigation / Telemetry Table (raw vehicle log)" type="Required" direction="Input" datatype="Table View" expression="telemetry_table">
+                <dialogReference>
+                    <para>The vehicle's navigation/telemetry log - a CSV, Excel worksheet, or geodatabase table with one row per time step. Must contain an X/longitude column, a Y/latitude column, and a timestamp column; rows missing any of those three are skipped. Everything else the multiplexer needs that the log does not have (camera angles, field of view, near/far distance, camera height) is supplied by the Video Acquisition Profile below.</para>
+                </dialogReference>
+            </param>
+            <param name="video_acquisition_profile" displayname="Video Acquisition Profile" type="Required" direction="Input" datatype="String" expression="video_acquisition_profile">
+                <dialogReference>
+                    <para>How the camera was mounted and pointed. This is the core of the tool: it supplies realistic estimates for the camera facts a navigation log almost never records - camera pitch and roll relative to the vehicle, horizontal and vertical field of view, near and far distance, and height above the seafloor - so a usable video metadata file can still be produced from an incomplete source. Selecting a profile immediately pre-fills the override fields below with its values, where you can inspect and adjust them; your edits are kept until you switch profiles, which overwrites those fields again. Choose Custom to fill them in yourself - it pre-fills nothing and overwrites nothing.</para>
+                </dialogReference>
+            </param>
+            <param name="output_folder" displayname="Output Folder for Video Metadata File" type="Required" direction="Input" datatype="Folder" expression="output_folder">
+                <dialogReference>
+                    <para>Folder the output CSV files are written into. A folder is used rather than a geodatabase because the downstream Esri tools (Convert Video Metadata, Video Multiplexer) only accept CSV, JSON or GPX files.</para>
+                </dialogReference>
+            </param>
+            <param name="output_name" displayname="Output Table Name" type="Required" direction="Input" datatype="String" expression="output_name">
+                <dialogReference>
+                    <para>Base name for the outputs, without an extension. Three files are produced: the final multiplexer-ready metadata CSV, this tool's own pre-conversion table, and the field mapping file. Existing files of the same name are overwritten.</para>
+                </dialogReference>
+            </param>
+            <param name="create_track_fc" displayname="Create Sensor Track Point Feature Class (QA layer)" type="Required" direction="Input" datatype="Boolean" expression="create_track_fc">
+                <dialogReference>
+                    <para>Also writes a point feature class of the resolved track, one point per output row, so you can put it on a map and confirm the positions look right BEFORE multiplexing. Purely for quality control - nothing downstream consumes it. This is the quickest way to catch a wrong Coordinate System of Telemetry X/Y, which otherwise puts the whole track in the wrong part of the world.</para>
+                </dialogReference>
+            </param>
+            <param name="output_gdb" displayname="Output Geodatabase for Sensor Track Feature Class" type="Optional" direction="Input" datatype="Workspace" expression="{output_gdb}">
+                <dialogReference>
+                    <para>Geodatabase the QA track feature class is written into. Required only when Create Sensor Track Point Feature Class is checked.</para>
+                </dialogReference>
+            </param>
+            <param name="input_srs" displayname="Coordinate System of Telemetry X/Y" type="Optional" direction="Input" datatype="Coordinate System" expression="{input_srs}">
+                <dialogReference>
+                    <para>The coordinate system the telemetry log's X/Y values are ALREADY in - not a system to convert them to. This tool always reprojects them to WGS84 longitude and latitude, because the MISB standard the video multiplexer follows requires geographic degrees. Getting this wrong is the single most common cause of a track appearing in the wrong part of the world: leave it at WGS84 only if the log genuinely holds degrees, and set the correct projected system if it holds eastings and northings in meters.</para>
+                </dialogReference>
+            </param>
+            <param name="x_field" displayname="X / Longitude / Easting Field" type="Optional" direction="Input" datatype="String" expression="{x_field}">
+                <dialogReference>
+                    <para>Column holding the east-west position: longitude if the log is geographic, easting if it is projected. Leave blank to auto-detect by name. Required data: a row with no usable X is skipped entirely.</para>
+                    <para>UNITS: whatever the Coordinate System of Telemetry X/Y above declares - decimal degrees for a geographic system, linear units (usually meters) for a projected one. The number is read exactly as written. Degrees-minutes-seconds text is not parsed; convert it to decimal degrees first. A value with six or seven digits before the decimal point is an easting, not a longitude.</para>
+                    <para>PROJECTION SENSITIVE: this column is reprojected from the declared coordinate system to WGS84 longitude/latitude, which MISB ST 0601 requires. Declaring the wrong system does not raise an error - it silently moves the whole track, often to another continent. Check the resolved longitude/latitude in the output before multiplexing.</para>
+                </dialogReference>
+            </param>
+            <param name="y_field" displayname="Y / Latitude / Northing Field" type="Optional" direction="Input" datatype="String" expression="{y_field}">
+                <dialogReference>
+                    <para>Column holding the north-south position: latitude if the log is geographic, northing if it is projected. Leave blank to auto-detect by name. Required data: a row with no usable Y is skipped entirely.</para>
+                    <para>UNITS: whatever the Coordinate System of Telemetry X/Y above declares - decimal degrees for a geographic system, linear units (usually meters) for a projected one. The number is read exactly as written. Degrees-minutes-seconds text is not parsed; convert it to decimal degrees first. A large positive northing in the millions from a southern-hemisphere survey carries a 10,000,000 m false northing and only makes sense against a southern UTM zone.</para>
+                    <para>PROJECTION SENSITIVE: this column is reprojected from the declared coordinate system to WGS84 longitude/latitude, which MISB ST 0601 requires. Declaring the wrong system does not raise an error - it silently moves the whole track, often to another continent. Check the resolved longitude/latitude in the output before multiplexing.</para>
+                </dialogReference>
+            </param>
+            <param name="time_field" displayname="Timestamp Field (for multiplexing order)" type="Optional" direction="Input" datatype="String" expression="{time_field}">
+                <dialogReference>
+                    <para>Column holding each row's date and time. Leave blank to auto-detect by name. Required data: a row whose timestamp is missing or unparseable is skipped, because the multiplexer aligns metadata to video frames by time. If no row parses, the run fails with 'No telemetry rows had usable X, Y, and Timestamp values'.</para>
+                    <para>ACCEPTED: a Date-type field; a plain epoch number in seconds, milliseconds or microseconds; ISO 8601 text (2022-09-01T00:00:00Z); M/D/YYYY with or without AM/PM; YYYY/MM/DD; M-D-YYYY; and dot-separated day-first D.M.YYYY (01.09.2022 00:00:00 = 1 September). Unix time is accepted but not required.</para>
+                    <para>WRITTEN AS: the value is converted, never passed through. Each parsed time becomes Precision Time Stamp (integer microseconds since 1 January 1970, the form MISB and the multiplexer require) plus a readable AcquisitionDate copy. Rows are sorted into time order before anything else is computed.</para>
+                    <para>TIME ZONE: a timestamp with no zone is assumed to be UTC. A log kept in local time still multiplexes correctly, because spacing and order are unaffected, but every absolute time will be off by that zone's offset. Convert to UTC first if the video has to line up with other time-stamped records.</para>
+                </dialogReference>
+            </param>
+            <param name="z_field" displayname="Z / Depth / Altitude Field" type="Optional" direction="Input" datatype="String" expression="{z_field}">
+                <dialogReference>
+                    <para>Column holding the platform's vertical position, written as-is to Sensor True Altitude. Leave blank to auto-detect by name. Optional data: a row with no Z is kept, not skipped. If the column is absent and no constant is set below, Sensor True Altitude is left empty.</para>
+                    <para>UNITS AND SIGN - the most common mistake: Sensor True Altitude is metres above mean sea level, positive up. Nothing is converted here, so a depth column (positive down, as most vehicle logs record it) must be negated before it is used - a raw 921.62 states the vehicle is 921 m in the air rather than 921 m under water, and the resulting footprints are meaningless. Feet are not converted to metres either.</para>
+                    <para>WHICH COLUMN: this is the vehicle's own depth or altitude relative to sea level, not its height above the seafloor. An altimeter reading (height above the bottom) belongs in Camera Height Above Seafloor under Video Acquisition Profile Overrides instead. Nothing here is validated against bathymetry, so a wrong sign or unit passes through silently.</para>
+                </dialogReference>
+            </param>
+            <param name="z_constant" displayname="Constant Z Value (used where the telemetry has none)" type="Optional" direction="Input" datatype="Double" expression="{z_constant}">
+                <dialogReference>
+                    <para>Applied to every row whose Z is missing - all of them, when the table has no Z column at all. Rows that carry their own Z keep it. Use this when the platform held a known working depth or altitude that the log never recorded. Same units and sign as the Z field above: metres above mean sea level, positive up, so a vehicle working at 900 m depth is entered as -900. Nothing is converted.</para>
+                </dialogReference>
+            </param>
+            <param name="z_is_ellipsoid_height" displayname="Telemetry Z is a height above the ellipsoid" type="Optional" direction="Input" datatype="Boolean" expression="{z_is_ellipsoid_height}">
+                <dialogReference>
+                    <para>Writes Z into Sensor Ellipsoid Height Extended as well as Sensor True Altitude. Leave this off unless you know that is what your log records: the two are different references, and this tool has no bathymetry with which to convert between them, so ticking it for a depth below the surface or an altitude above the seafloor states something untrue rather than merely imprecise. Off, the field stays empty and the multiplexer reports it as a missing value. An explicit Additional Field Mapping to that field takes precedence over this.</para>
+                </dialogReference>
+            </param>
+            <param name="write_far_distance" displayname="Write Sensor Far Distance to the multiplexer file" type="Optional" direction="Input" datatype="Boolean" expression="{write_far_distance}">
+                <dialogReference>
+                    <para>Off by default, because the field is not needed to draw a video footprint and a short value can stop one appearing: it caps how far the view reaches, so a profile's few metres cannot arrive at a seafloor tens of metres away, and the footprint is clipped to nothing. Turn it on only when the profile's far distance is genuinely larger than the range from the camera to the ground. The value is always written to the intermediate table either way, where the imagery tools read it.</para>
+                </dialogReference>
+            </param>
+            <param name="additional_field_mapping" displayname="Additional Field Mapping" type="Optional" direction="Input" datatype="Value Table" expression="{additional_field_mapping}">
+                <dialogReference>
+                    <para>Sends any other telemetry column straight to a video metadata field - a recorded heading, pitch, roll or field of view, for instance, in place of the profile's assumed value. Type the column name on the left exactly as it appears in the table header - the Z / Depth / Altitude Field drop-down above lists the same names if you need to check the spelling - and pick its destination on the right. A mapped value overrides whatever the profile or auto-detection would have supplied, but a blank cell leaves the existing value alone. ObjectID, Precision Time Stamp, AcquisitionDate, Sensor Longitude and Sensor Latitude are not listed because this tool computes them. An unrecognised column name is reported as a warning and skipped, rather than failing the run.</para>
+                </dialogReference>
+            </param>
+            <param name="camera_pitch_override" displayname="Camera Tilt from Nadir (degrees, 0 = straight down, 90 = horizon)" type="Optional" direction="Input" datatype="Double" expression="{camera_pitch_override}">
+                <dialogReference>
+                    <para>Pre-filled from the Video Acquisition Profile selected above. Edit it to describe your actual camera rig; the value here is written to every output row. Your edits are kept until you change the profile selection, which overwrites this field again. The Custom profile never pre-fills or overwrites anything - supply every value here yourself.</para>
+                </dialogReference>
+            </param>
+            <param name="camera_roll_override" displayname="Sensor Relative Roll Angle (degrees)" type="Optional" direction="Input" datatype="Double" expression="{camera_roll_override}">
+                <dialogReference>
+                    <para>Pre-filled from the Video Acquisition Profile selected above. Edit it to describe your actual camera rig; the value here is written to every output row. Your edits are kept until you change the profile selection, which overwrites this field again. The Custom profile never pre-fills or overwrites anything - supply every value here yourself.</para>
+                </dialogReference>
+            </param>
+            <param name="heading_constant_override" displayname="Constant Platform Heading (degrees, used if no track/field)" type="Optional" direction="Input" datatype="Double" expression="{heading_constant_override}">
+                <dialogReference>
+                    <para>Pre-filled from the Video Acquisition Profile selected above. Edit it to describe your actual camera rig; the value here is written to every output row. Your edits are kept until you change the profile selection, which overwrites this field again. The Custom profile never pre-fills or overwrites anything - supply every value here yourself.</para>
+                </dialogReference>
+            </param>
+            <param name="hfov_override" displayname="Sensor Horizontal Field of View (degrees)" type="Optional" direction="Input" datatype="Double" expression="{hfov_override}">
+                <dialogReference>
+                    <para>Pre-filled from the Video Acquisition Profile selected above. Edit it to describe your actual camera rig; the value here is written to every output row. Your edits are kept until you change the profile selection, which overwrites this field again. The Custom profile never pre-fills or overwrites anything - supply every value here yourself.</para>
+                </dialogReference>
+            </param>
+            <param name="vfov_override" displayname="Sensor Vertical Field of View (degrees)" type="Optional" direction="Input" datatype="Double" expression="{vfov_override}">
+                <dialogReference>
+                    <para>Pre-filled from the Video Acquisition Profile selected above. Edit it to describe your actual camera rig; the value here is written to every output row. Your edits are kept until you change the profile selection, which overwrites this field again. The Custom profile never pre-fills or overwrites anything - supply every value here yourself.</para>
+                </dialogReference>
+            </param>
+            <param name="camera_height_override" displayname="Camera Height Above Seafloor (meters)" type="Optional" direction="Input" datatype="Double" expression="{camera_height_override}">
+                <dialogReference>
+                    <para>Pre-filled from the Video Acquisition Profile selected above. Edit it to describe your actual camera rig; the value here is written to every output row. Your edits are kept until you change the profile selection, which overwrites this field again. The Custom profile never pre-fills or overwrites anything - supply every value here yourself.</para>
+                </dialogReference>
+            </param>
+            <param name="near_distance_override" displayname="Near Distance (meters)" type="Optional" direction="Input" datatype="Double" expression="{near_distance_override}">
+                <dialogReference>
+                    <para>Pre-filled from the Video Acquisition Profile selected above. Edit it to describe your actual camera rig; the value here is written to every output row. Your edits are kept until you change the profile selection, which overwrites this field again. The Custom profile never pre-fills or overwrites anything - supply every value here yourself.</para>
+                </dialogReference>
+            </param>
+            <param name="far_distance_override" displayname="Far Distance (meters)" type="Optional" direction="Input" datatype="Double" expression="{far_distance_override}">
+                <dialogReference>
+                    <para>Pre-filled from the Video Acquisition Profile selected above. Edit it to describe your actual camera rig; the value here is written to every output row. Your edits are kept until you change the profile selection, which overwrites this field again. The Custom profile never pre-fills or overwrites anything - supply every value here yourself.</para>
+                </dialogReference>
+            </param>
+            <param name="import_profile_template" displayname="Import Video Acquisition Profile Template (optional)" type="Optional" direction="Input" datatype="File" expression="{import_profile_template}">
+                <dialogReference>
+                    <para>A JSON file of camera settings saved by a previous run's Export Resolved Profile option. Use it to apply one vehicle's measured rig settings across every dive of a cruise instead of retyping them. Values loaded here fill the override fields above.</para>
+                </dialogReference>
+            </param>
+            <param name="export_profile_template" displayname="Export Resolved Profile as Template for Future Runs" type="Optional" direction="Input" datatype="Boolean" expression="{export_profile_template}">
+                <dialogReference>
+                    <para>Saves the camera settings actually used by this run - the selected profile plus any edits you made to the override fields - as a JSON file you can import into later runs. Check this once you have the rig's settings right, then reuse the file for every subsequent dive with the same vehicle.</para>
+                </dialogReference>
+            </param>
+            <param name="profile_template_output" displayname="Profile Template Output File (.json)" type="Optional" direction="Output" datatype="File" expression="{profile_template_output}">
+                <dialogReference>
+                    <para>Where to save the profile template JSON. Enabled only when Export Resolved Profile as Template is checked.</para>
+                </dialogReference>
+            </param>
+            <param name="resample_interval" displayname="Resample Telemetry to Fixed Time Interval (seconds, optional)" type="Optional" direction="Input" datatype="Double" expression="{resample_interval}">
+                <dialogReference>
+                    <para>Thins the telemetry to one row per this many seconds. Leave blank to keep every row. Useful when the log is sampled far faster than the video needs - a 10 Hz log over a long dive produces a very large metadata file, and 1 second per row is usually ample for multiplexing.</para>
+                </dialogReference>
+            </param>
+            <param name="camera_id" displayname="Camera ID" type="Required" direction="Input" datatype="Long" expression="camera_id">
+                <dialogReference>
+                    <para>Identifier for the camera these settings describe. One physical camera per run, so the default of 1 is correct unless you are keeping several cameras' outputs distinct.</para>
+                </dialogReference>
+            </param>
+            <param name="camera_ncols" displayname="Camera Sensor Columns (pixels)" type="Optional" direction="Input" datatype="Long" expression="{camera_ncols}">
+                <dialogReference>
+                    <para>Video frame width in pixels, e.g. 1920 for HD. Optional.</para>
+                </dialogReference>
+            </param>
+            <param name="camera_nrows" displayname="Camera Sensor Rows (pixels)" type="Optional" direction="Input" datatype="Long" expression="{camera_nrows}">
+                <dialogReference>
+                    <para>Video frame height in pixels, e.g. 1080 for HD. Optional.</para>
+                </dialogReference>
+            </param>
+            <param name="camera_focal_length" displayname="Camera Focal Length" type="Optional" direction="Input" datatype="Double" expression="{camera_focal_length}">
+                <dialogReference>
+                    <para>Lens focal length, in the same units as Camera Pixel Size (Esri's Cameras table schema documents both in microns). Optional - leave blank if unknown.</para>
+                </dialogReference>
+            </param>
+            <param name="camera_pixel_size" displayname="Camera Pixel Size" type="Optional" direction="Input" datatype="Double" expression="{camera_pixel_size}">
+                <dialogReference>
+                    <para>Physical size of one sensor pixel, in the same units as Camera Focal Length. Optional - leave blank if unknown.</para>
+                </dialogReference>
+            </param>
+            <param name="out_video_metadata_table" displayname="Output Video Metadata Table (Multiplexer-ready)" type="Derived" direction="Output" datatype="File" expression="{out_video_metadata_table}" />
+            <param name="out_metadata_mapping_file" displayname="Output Metadata Mapping File" type="Derived" direction="Output" datatype="File" expression="{out_metadata_mapping_file}" />
+            <param name="out_track_fc" displayname="Output Sensor Track Feature Class" type="Derived" direction="Output" datatype="Feature Class" expression="{out_track_fc}" />
+        </parameters>
+        <summary>
+            <para>Builds a metadata CSV ready for Esri's Video Multiplexer from a vehicle's navigation/telemetry log, so deep ocean video can be turned into geospatially aware full motion video (FMV).</para>
+            <para>Only X, Y and a timestamp are required from the log. The camera facts a navigation log almost never records - camera pitch and roll, heading, field of view, near and far distance, height above the seafloor - are supplied instead by a selectable Video Acquisition Profile (remotely operated vehicle, autonomous underwater vehicle, towed sled, drop camera), which you can inspect and adjust before the run. Heading can also be computed from the track itself. Positions are reprojected to WGS84 longitude/latitude, which the MISB ST 0601 standard behind full motion video requires.</para>
+            <para>REQUIREMENT: the Image Analyst extension - the final field-naming and formatting pass is delegated to Esri's own Convert Video Metadata tool rather than reimplemented here.</para>
+        </summary>
+    </tool>
+    <dataIdInfo>
+        <idCitation>
+            <resTitle>Generate Deep Ocean Video Metadata</resTitle>
+        </idCitation>
+    </dataIdInfo>
+</metadata>
